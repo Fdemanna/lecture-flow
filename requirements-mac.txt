@@ -1,0 +1,4 @@
+streamlit
+mlx-whisper
+requests
+python-dotenv

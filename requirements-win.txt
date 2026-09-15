@@ -1,0 +1,4 @@
+streamlit
+faster-whisper
+requests
+python-dotenv

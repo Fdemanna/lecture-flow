@@ -1,0 +1,11 @@
+venv/
+venv_win/
+*.env
+.streamlit/secrets.toml
+clases/
+*.mp4
+*.mkv
+*.wav
+*.mp3
+__pycache__/
+.DS_Store

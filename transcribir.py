@@ -2,6 +2,20 @@ import os
 import sys
 import subprocess
 import platform
+# En Windows, registrar las rutas de las DLLs de NVIDIA si existen en el entorno
+if platform.system() == "Windows":
+    base_venv = os.path.dirname(os.path.dirname(sys.executable))
+    rutas_dll = [
+        os.path.join(base_venv, "Lib", "site-packages", "nvidia", "cublas", "bin"),
+        os.path.join(base_venv, "Lib", "site-packages", "nvidia", "cudnn", "bin"),
+    ]
+    for ruta in rutas_dll:
+        if os.path.isdir(ruta):
+            try:
+                os.add_dll_directory(ruta)
+            except AttributeError:
+                pass
+            os.environ["PATH"] = ruta + os.pathsep + os.environ.get("PATH", "")
 
 def extraer_audio_rapido(ruta_entrada: str, ruta_audio_temp: str):
     print("-> Extrayendo pista de audio con FFmpeg...", flush=True)

@@ -1,9 +1,0 @@
-# REGLAS CRÍTICAS DEL PROYECTO: Asistente DAW Multiplataforma
-
-1. NO reescribir la lógica que ya funciona en `app.py`, `generar_apuntes.py` y `notion_exporter.py` salvo que sea estrictamente necesario para la compatibilidad con Windows.
-2. NUNCA borrar ni tocar la carpeta `clases/` ni los archivos `.md` existentes (apuntes).
-3. Asegurar que las credenciales (`.env`, `secrets.toml`) y archivos de vídeo/audio permanezcan ignorados por Git.
-4. Mantener la compatibilidad multiplataforma:
-   - macOS: motor MLX (Metal) y script de arranque `.command`.
-   - Windows: motor faster-whisper (CUDA/CPU) y arranque silencioso con `.vbs` + `.bat`.
-5. Ejecutar verificaciones en la terminal integrada antes de dar una tarea por completada.

@@ -51,50 +51,52 @@ def transcribir_archivo(ruta_entrada: str, ruta_salida: str = "transcripcion.txt
 
     try:
         sistema = platform.system()
-        lineas = []
-
-        if sistema == "Darwin":
-            import mlx_whisper
-            repo_modelo = "mlx-community/whisper-large-v3-turbo"
-            print("Iniciando transcripción con mlx-whisper (Apple Silicon)...", flush=True)
-            resultado = mlx_whisper.transcribe(
-                audio_a_procesar,
-                path_or_hf_repo=repo_modelo,
-                language="es",
-                word_timestamps=False,
-                verbose=True
-            )
-            for seg in resultado.get("segments", []):
-                ini = int(seg["start"])
-                h = ini // 3600
-                m = (ini % 3600) // 60
-                s = ini % 60
-                tiempo_str = f"[{h:02d}:{m:02d}:{s:02d}]"
-                lineas.append(f"{tiempo_str} {seg['text'].strip()}")
-        else:
-            from faster_whisper import WhisperModel
-            print(f"Iniciando transcripción con faster-whisper ({sistema})...", flush=True)
-            try:
-                print("Intentando cargar modelo en CUDA...", flush=True)
-                model = WhisperModel("large-v3", device="cuda", compute_type="float16")
-            except Exception as e:
-                print(f"Fallo al cargar en CUDA ({e}). Haciendo fallback a CPU (int8)...", flush=True)
-                model = WhisperModel("large-v3", device="cpu", compute_type="int8")
-
-            segments, info = model.transcribe(audio_a_procesar, language="es")
-            for seg in segments:
-                ini = int(seg.start)
-                h = ini // 3600
-                m = (ini % 3600) // 60
-                s = ini % 60
-                tiempo_str = f"[{h:02d}:{m:02d}:{s:02d}]"
-                print(f"{tiempo_str} {seg.text.strip()}", flush=True)
-                lineas.append(f"{tiempo_str} {seg.text.strip()}")
 
         with open(ruta_salida, "w", encoding="utf-8") as f:
-            f.write("\n".join(lineas))
+            if sistema == "Darwin":
+                import mlx_whisper
+                repo_modelo = "mlx-community/whisper-large-v3-turbo"
+                print("Iniciando transcripción con mlx-whisper (Apple Silicon)...", flush=True)
+                resultado = mlx_whisper.transcribe(
+                    audio_a_procesar,
+                    path_or_hf_repo=repo_modelo,
+                    language="es",
+                    word_timestamps=False,
+                    verbose=True
+                )
+                for seg in resultado.get("segments", []):
+                    ini = int(seg["start"])
+                    h = ini // 3600
+                    m = (ini % 3600) // 60
+                    s = ini % 60
+                    tiempo_str = f"[{h:02d}:{m:02d}:{s:02d}]"
+                    linea = f"{tiempo_str} {seg['text'].strip()}\n"
+                    print(linea, end="", flush=True)
+                    f.write(linea)
+                    f.flush()
+            else:
+                from faster_whisper import WhisperModel
+                print(f"Iniciando transcripción con faster-whisper ({sistema})...", flush=True)
+                try:
+                    print("Intentando cargar modelo en CUDA...", flush=True)
+                    model = WhisperModel("large-v3-turbo", device="cuda", compute_type="float16")
+                except Exception as e:
+                    print(f"Fallo al cargar en CUDA ({e}). Haciendo fallback a CPU (int8)...", flush=True)
+                    model = WhisperModel("large-v3-turbo", device="cpu", compute_type="int8")
 
-        print(f"--- Transcripción completada y guardada en: {ruta_salida} ---", flush=True)
+                segments, info = model.transcribe(audio_a_procesar, language="es")
+                for seg in segments:
+                    ini = int(seg.start)
+                    h = ini // 3600
+                    m = (ini % 3600) // 60
+                    s = ini % 60
+                    tiempo_str = f"[{h:02d}:{m:02d}:{s:02d}]"
+                    linea = f"{tiempo_str} {seg.text.strip()}\n"
+                    print(linea, end="", flush=True)
+                    f.write(linea)
+                    f.flush()
+
+        print(f"\n--- Transcripción completada y guardada en: {ruta_salida} ---", flush=True)
 
     finally:
         if archivo_temp and os.path.exists(archivo_temp):

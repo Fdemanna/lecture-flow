@@ -74,7 +74,7 @@ if "clase_seleccionada" not in st.session_state:
 if "materia_seleccionada" not in st.session_state:
     st.session_state["materia_seleccionada"] = None
 
-TIMEOUT_SEGUNDOS = 900
+TIMEOUT_SEGUNDOS = 14400  # 4 horas para clases largas (>1.5h)
 
 
 def es_ruta_segura(ruta_destino: str) -> bool:
@@ -103,7 +103,7 @@ def ejecutar_paso_con_progreso(comando, caja_texto, contenedor_estado, mensaje_e
             if linea:
                 lineas_consola.append(linea)
                 caja_texto.code("".join(lineas_consola[-8:]), language="bash")
-            if time.monotonic() - t_inicio > TIMEOUT_SEGUNDOS:
+            if TIMEOUT_SEGUNDOS is not None and (time.monotonic() - t_inicio > TIMEOUT_SEGUNDOS):
                 proceso.kill()
                 raise TimeoutError("Timeout: Subproceso excedió el tiempo límite.")
     finally:

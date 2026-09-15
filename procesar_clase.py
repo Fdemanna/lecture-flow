@@ -75,7 +75,7 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
         ruta_archivo_en_carpeta,
         ruta_transcripcion
     ]
-    subprocess.run(cmd_transcribir, check=True)
+    subprocess.run(cmd_transcribir, check=True, timeout=14400)
 
     # 3. Ejecutar Fase 2: Apuntes y Auditoría (Ollama)
     print("\n" + "="*50)
@@ -88,7 +88,7 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
         ruta_transcripcion,
         ruta_apuntes
     ]
-    subprocess.run(cmd_apuntes, check=True)
+    subprocess.run(cmd_apuntes, check=True, timeout=14400)
 
     print("\n" + "="*50)
     print("🎉 FLUJO COMPLETADO CON ÉXITO")

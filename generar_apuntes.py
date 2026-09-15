@@ -15,6 +15,13 @@ import shutil
 import sys
 import ollama
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 MODEL = "qwen2.5:7b"
 
 # [M-2] Constantes para estimación del presupuesto de contexto en unificación
@@ -238,7 +245,7 @@ def unificar_apuntes_jerarquico(apuntes_por_bloque: list[str]) -> str:
 # ---------------------------------------------------------------------------
 def generar_seccion_examen(contenido_apuntes: str) -> str:
     """Genera una sección estructurada de preparación para examen a partir del documento final."""
-    print("\n--- Generando sección '\U0001f3af Preparación para Examen' ---")
+    print("\n--- Generando sección '[EXAMEN] Preparación para Examen' ---")
 
     prompt_examen = f"""
 A partir de este documento de apuntes de DAW, genera EXCLUSIVAMENTE la siguiente sección estandarizada en Markdown.
@@ -270,7 +277,7 @@ DOCUMENTO DE APUNTES:
         seccion = llamar_modelo_seguro(prompt_examen, options_examen)
         return seccion
     except Exception as e:
-        print(f"⚠️  No se pudo generar la sección de examen: {e}")
+        print(f"[AVISO] No se pudo generar la sección de examen: {e}")
         return ""
 
 
@@ -310,7 +317,7 @@ def llamar_modelo_seguro(prompt_usuario: str, options: dict) -> str:
     if lineas:
         ultima_linea = lineas[-1]
         if ultima_linea.startswith("###") and not ultima_linea.endswith((".", ":", "]", ")")):
-            print(f"\n⚠️  Aviso: posible corte estructural al final detectado: '{ultima_linea}'")
+            print(f"\n[AVISO] Posible corte estructural al final detectado: '{ultima_linea}'")
 
     return contenido
 
@@ -332,11 +339,11 @@ def validar_timestamps(contenido: str) -> str:
                 sin_timestamp.append((i, linea_strip))
 
     if sin_timestamp:
-        print(f"\n⚠️  Aviso: {len(sin_timestamp)} bloque(s) sin timestamp detectado(s):")
+        print(f"\n[AVISO] {len(sin_timestamp)} bloque(s) sin timestamp detectado(s):")
         for num_linea, texto in sin_timestamp[:5]:
             print(f"   - Línea {num_linea}: {texto[:70]}...")
     else:
-        print("\n✅ Validación sintáctica: todas las citas incluyen marca de tiempo.")
+        print("\n[OK] Validación sintáctica: todas las citas incluyen marca de tiempo.")
 
     return contenido
 
@@ -380,9 +387,9 @@ APUNTES GENERADOS:
             f.write(reporte)
         
         if "🚩 POSIBLE ALUCINACIÓN" in reporte:
-            print(f"⚠️  Se detectaron discrepancias. Revisa el informe en: {ruta_auditoria}")
+            print(f"[AVISO] Se detectaron discrepancias. Revisa el informe en: {ruta_auditoria}")
         else:
-            print(f"✅ Auditoría limpia. Informe guardado en: {ruta_auditoria}")
+            print(f"[OK] Auditoría limpia. Informe guardado en: {ruta_auditoria}")
             
     except Exception as e:
         print(f"Error durante la fase de auditoría: {e}")

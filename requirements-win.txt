@@ -2,3 +2,7 @@ streamlit
 faster-whisper
 requests
 python-dotenv
+tqdm
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+ollama

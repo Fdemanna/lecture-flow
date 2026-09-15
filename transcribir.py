@@ -2,9 +2,16 @@ import os
 import sys
 import subprocess
 import platform
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 # En Windows, registrar las rutas de las DLLs de NVIDIA si existen en el entorno
 if platform.system() == "Windows":
-    base_venv = os.path.dirname(os.path.dirname(sys.executable))
+    base_venv = sys.prefix
     rutas_dll = [
         os.path.join(base_venv, "Lib", "site-packages", "nvidia", "cublas", "bin"),
         os.path.join(base_venv, "Lib", "site-packages", "nvidia", "cudnn", "bin"),
@@ -13,7 +20,7 @@ if platform.system() == "Windows":
         if os.path.isdir(ruta):
             try:
                 os.add_dll_directory(ruta)
-            except AttributeError:
+            except (AttributeError, OSError):
                 pass
             os.environ["PATH"] = ruta + os.pathsep + os.environ.get("PATH", "")
 
@@ -41,7 +48,7 @@ def transcribir_archivo(ruta_entrada: str, ruta_salida: str = "transcripcion.txt
     if es_video:
         archivo_temp = os.path.splitext(ruta_entrada)[0] + "_temp.wav"
         if os.path.exists(archivo_temp):
-            print(f"⚠️  Temporal huérfano detectado, limpiando: {archivo_temp}", flush=True)
+            print(f"[AVISO] Temporal huérfano detectado, limpiando: {archivo_temp}", flush=True)
             try:
                 os.remove(archivo_temp)
             except OSError as e:
@@ -56,7 +63,7 @@ def transcribir_archivo(ruta_entrada: str, ruta_salida: str = "transcripcion.txt
             if sistema == "Darwin":
                 import mlx_whisper
                 repo_modelo = "mlx-community/whisper-large-v3-turbo"
-                print("Iniciando transcripción con mlx-whisper (Apple Silicon)...", flush=True)
+                print("Iniciando transcripción con mlx-whisper (macOS Metal)...", flush=True)
                 resultado = mlx_whisper.transcribe(
                     audio_a_procesar,
                     path_or_hf_repo=repo_modelo,

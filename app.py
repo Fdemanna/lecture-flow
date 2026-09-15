@@ -3,6 +3,13 @@ import shutil
 import subprocess
 import sys
 import time
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 import streamlit as st
 from procesar_clase import normalizar_nombre
 from notion_exporter import exportar_a_notion
@@ -32,7 +39,7 @@ st.html("""
   }
   
   /* Badges y chips estilo Stitch */
-  .badge-m4-chip {
+  .badge-status-chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -180,12 +187,12 @@ st.html("""
       </div>
       <div style="display: flex; align-items: center; gap: 6px;">
         <span class="dot-ping"></span>
-        <span style="font-size: 0.7rem; color: #4edea3;">Apple Silicon M4 • Local LLM</span>
+        <span style="font-size: 0.7rem; color: #4edea3;">Multiplatform GPU • Local LLM</span>
       </div>
     </div>
   </div>
-  <div class="badge-m4-chip">
-    <span class="dot-ping"></span> M4 Ready
+  <div class="badge-status-chip">
+    <span class="dot-ping"></span> Multiplatform
   </div>
 </div>
 """)
@@ -247,7 +254,7 @@ if st.session_state["clase_seleccionada"] and st.session_state["materia_seleccio
 else:
     # VISTA CONSOLA DE PROCESAMIENTO
     st.markdown("#### ⚡ Consola de Procesamiento Local")
-    st.caption("MLX Whisper + Qwen 2.5 (Local M4) • GPU 16-Core")
+    st.caption("Whisper (CUDA / Metal) + Qwen 2.5 • Multiplataforma Local")
 
     metodo_origen = st.radio(
         "Origen del material:",
@@ -279,7 +286,7 @@ else:
         archivo_cargado = st.file_uploader(
             "Arrastra aquí la grabación o pulsa para seleccionar (MP4, MKV, MP3, WAV)",
             type=["mp4", "mkv", "mp3", "m4a", "wav"],
-            help="Aceleración nativa con Metal M4"
+            help="Aceleración hardware nativa (CUDA / Metal)"
         )
         if archivo_cargado and materia_nombre and clase_nombre:
             mat_segura = normalizar_nombre(materia_nombre)
@@ -314,7 +321,7 @@ else:
                 clase_actual = partes[1]
 
     st.write("")
-    btn_iniciar = st.button("🚀 Iniciar Procesamiento con Apple Silicon", type="primary", use_container_width=True)
+    btn_iniciar = st.button("🚀 Iniciar Procesamiento Local", type="primary", use_container_width=True)
 
     if btn_iniciar:
         if not ruta_archivo_final or not os.path.exists(ruta_archivo_final):
@@ -346,9 +353,9 @@ else:
                     barra_progreso.progress(50, text="Paso 1/2 omitido: Transcripción previa detectada.")
                     caja_consola.code("[INFO] Se reutiliza 'transcripcion.txt' existente.", language="bash")
                 else:
-                    barra_progreso.progress(15, text="Paso 1/2: Extrayendo PCM WAV y transcribiendo con MLX...")
+                    barra_progreso.progress(15, text="Paso 1/2: Extrayendo PCM WAV y transcribiendo audio...")
                     cmd_transcribir = [sys.executable, "-u", "transcribir.py", ruta_archivo_final, ruta_transcripcion]
-                    ejecutar_paso_con_progreso(cmd_transcribir, caja_consola, estado_actual, "Paso 1/2: MLX-Whisper transcribiendo...")
+                    ejecutar_paso_con_progreso(cmd_transcribir, caja_consola, estado_actual, "Paso 1/2: Whisper transcribiendo...")
                     barra_progreso.progress(50, text="Transcripción completada.")
 
                 # 2. Generación con Qwen 2.5

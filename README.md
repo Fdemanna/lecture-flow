@@ -1,69 +1,80 @@
 # 🎓 LectureFlow
 
-> **Turn raw video & audio lectures into structured, interactive Notion study guides — 100% locally powered by Apple Silicon (Metal) and NVIDIA CUDA.**
+> **Transforma grabaciones de clases (audio/vídeo) en apuntes interactivos en Notion — 100% local con Apple Silicon (Metal) y NVIDIA CUDA.**
 
-[![Python Version](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://python.org)
+[![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
 [![Transcription Engine](https://img.shields.io/badge/Transcription-MLX%20Whisper%20%7C%20Faster--Whisper-orange.svg)]()
 [![LLM Engine](https://img.shields.io/badge/LLM-Qwen%202.5%20(Ollama)-green.svg)]()
 [![Integration](https://img.shields.io/badge/Integration-Notion%20API-black.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 📌 Architecture Overview
+---
 
-LectureFlow operates in a fully offline, privacy-first 3-stage pipeline before pushing to Notion:
+## 📌 Requisitos Previos
 
-1. **[Audio Extraction]**: Fast extraction to PCM WAV 16kHz using FFmpeg.
-2. **[Local Transcription]**: High-speed, high-accuracy transcription using **MLX Metal** on macOS or **Faster-Whisper (CUDA/CPU)** on Windows/Linux.
-3. **[Map-Reduce Synthesis & Audit]**: Summarization and Anti-Hallucination Audit powered by **Qwen 2.5 (via Ollama)**.
-4. **[Notion API Export]**: Automated assembly of native blocks (TOCs, Callouts, Toggle lists, Code blocks) into your connected Notion database.
+Antes de ejecutar la instalación rápida, asegúrate de tener instalado en tu sistema:
 
-## ✨ Key Features
-
-- **100% Private & Local**: Zero cloud fees, zero OpenAI API keys needed. Your lectures stay on your machine.
-- **Zero-Terminal Execution**: One-click launch via native scripts (`.command` for macOS, `.vbs` for Windows).
-- **Anti-Hallucination Audit**: Integrated technical auditing with confidence scoring to ensure notes accurately reflect the source material.
-- **Native Notion Integration**: Generates dynamic Tables of Contents, syntax-highlighted code blocks, context-aware callouts, and interactive `to_do` checklists directly in Notion.
-- **Robust Multiplatform Resilience**: 
-  - 15-minute anti-zombie timeouts.
-  - Path Traversal mitigation using `os.path.realpath`.
-  - Notion API batch chunking (100 blocks per request).
-
-## 🚀 Quick Start & Installation
-
-### Prerequisites
-- **Python 3.9+** installed.
-- **FFmpeg** installed and added to your system PATH.
-- **Ollama** installed with the `qwen2.5:7b` model pulled (`ollama run qwen2.5:7b`).
-
-### Setup on macOS
-1. Open a terminal in the project directory and run: `bash scripts/setup_mac.sh` (Only required the first time).
-2. Configure your Notion variables (see below).
-3. **Run:** Double-click `Iniciar_Mac.command` to launch the app.
-
-### Setup on Windows
-1. Double-click `scripts\setup_windows.bat` (Only required the first time).
-2. Configure your Notion variables (see below).
-3. **Run:** Double-click `Iniciar_Windows.vbs` to launch the app silently in the background.
-
-### 🔑 Notion Integration Guide
-1. Go to [Notion Integrations](https://www.notion.so/my-integrations) and create a new **Internal Integration**.
-2. Copy the **Internal Integration Secret**.
-3. Go to the Notion database (full page) where you want the notes to be saved. Click the three dots `...` in the top right > **Connect to** > select your integration.
-4. Copy the **Database ID** from the URL (e.g., `https://www.notion.so/workspace/1234567890abcdef?v=...` -> `1234567890abcdef`).
-5. Create a `.env` file based on `.env.example`:
-   ```env
-   NOTION_TOKEN=your_internal_integration_secret
-   NOTION_DATABASE_ID=your_database_id
+1. **Python 3.10+**: [python.org](https://www.python.org/downloads/) *(En Windows, recuerda marcar "Add Python to PATH")*.
+2. **FFmpeg**: Necesario para la extracción de audio PCM de archivos multimedia. *(El script de instalación intentará instalarlo automáticamente mediante `winget` en Windows o `brew` en macOS)*.
+3. **Ollama**: Descárgalo de [ollama.com](https://ollama.com) y descarga el modelo Qwen 2.5 ejecutando en tu consola:
+   ```bash
+   ollama run qwen2.5:7b
    ```
-
-## 🛠️ Tech Stack
-
-- **UI Framework:** Streamlit
-- **Transcription:** MLX Whisper (macOS) / Faster-Whisper (Windows/Linux)
-- **Local LLM Engine:** Ollama (Qwen 2.5)
-- **Exporting:** Notion API v1
-- **Audio Processing:** FFmpeg
+   *(También compatible con `ollama run qwen2.5:latest`)*.
 
 ---
-*Built for Technical Students and Developers.*
+
+## 🚀 Instalación Rápida (Zero Terminal)
+
+LectureFlow está diseñado para ser clonado y ejecutado **sin necesidad de interactuar con la terminal** en el uso diario.
+
+### 🪟 Windows (NVIDIA CUDA / CPU)
+
+1. **Configuración Inicial (Solo la primera vez):**
+   * Haz doble clic en el archivo `scripts/setup_windows.bat`.
+   * El script creará automáticamente el entorno virtual `venv_win`, instalará las dependencias (incluyendo librerías de aceleración CUDA de NVIDIA `cublas` y `cudnn`) y verificará FFmpeg.
+2. **Ejecución Diaria:**
+   * Haz doble clic en `Iniciar_Windows.vbs` (arranca el asistente en segundo plano y abre la interfaz web en tu navegador).
+
+### 🍎 macOS (Apple Silicon / Metal)
+
+1. **Configuración Inicial (Solo la primera vez):**
+   * Haz doble clic en `scripts/setup_mac.command` (o ejecuta `bash scripts/setup_mac.sh`).
+   * El script creará el entorno `venv`, instalará `mlx-whisper` optimizado para GPU Metal (M1/M2/M3/M4) y verificará FFmpeg vía Homebrew.
+2. **Ejecución Diaria:**
+   * Haz doble clic en `Iniciar_Mac.command`.
+
+---
+
+## 🔑 Configuración de Notion API
+
+1. Crea una integración interna en [Notion Integrations](https://www.notion.so/my-integrations).
+2. Copia el **Internal Integration Secret**.
+3. En la base de datos de Notion donde deseas guardar los apuntes, haz clic en los 3 puntos `...` (arriba a la derecha) > **Conectar a** > selecciona tu integración.
+4. Crea un archivo `.env` en la raíz del proyecto a partir de `.env.example`:
+   ```env
+   NOTION_TOKEN=tu_token_de_notion
+   NOTION_DATABASE_ID=tu_id_de_base_de_datos
+   ```
+
+---
+
+## ✨ Características Clave
+
+- **100% Privado y Local**: Sin APIs de pago en la nube. Todo el procesamiento de audio y generación de apuntes se realiza localmente.
+- **Soporte para Clases Largas (> 1.5 horas)**: Motor streaming en tiempo real y timeout elevado a 4 horas (14.400s).
+- **Control de Alucinaciones (Critic-Loop)**: Verificación automática de fidelidad con reporte de auditoría.
+- **Aceleración Hardware Nativa**:
+  - macOS: `mlx-whisper` con `large-v3-turbo` sobre GPU Metal M1/M2/M3/M4.
+  - Windows: `faster-whisper` con `large-v3-turbo` sobre NVIDIA CUDA (`float16`) y fallback automático a CPU (`int8`).
+
+---
+
+## 🛠️ Arquitectura y Tecnologías
+
+- **UI Framework:** Streamlit
+- **Motor de Transcripción:** Faster-Whisper (CUDA/CPU) / MLX-Whisper (Metal)
+- **Motor LLM Local:** Ollama (Qwen 2.5 7B)
+- **Exportador:** Notion API v1 (batch chunking de 100 bloques)
+- **Audio Pipeline:** FFmpeg PCM WAV 16kHz

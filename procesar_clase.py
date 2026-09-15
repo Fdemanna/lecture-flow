@@ -15,6 +15,13 @@ import sys
 import shutil
 import subprocess
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 CARPETA_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clases")
 
 def normalizar_nombre(texto: str) -> str:
@@ -51,7 +58,7 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
 
     os.makedirs(directorio_destino, exist_ok=True)
     
-    print(f"\n📁 Carpeta de trabajo lista: {directorio_destino}")
+    print(f"\n[DIR] Carpeta de trabajo lista: {directorio_destino}")
 
     # Copiar o mover el archivo de entrada a la carpeta correspondiente
     nombre_archivo = os.path.basename(ruta_archivo_origen)
@@ -64,9 +71,9 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
     ruta_transcripcion = os.path.join(directorio_destino, "transcripcion.txt")
     ruta_apuntes = os.path.join(directorio_destino, "apuntes.md")
 
-    # 2. Ejecutar Fase 1: Transcripción (MLX-Whisper)
+    # 2. Ejecutar Fase 1: Transcripción (Whisper)
     print("\n" + "="*50)
-    print("▶ FASE 1: Transcripción con Apple Silicon")
+    print("[FASE 1] Transcripción Multiplataforma (CUDA / Metal)")
     print("="*50)
     
     cmd_transcribir = [
@@ -79,7 +86,7 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
 
     # 3. Ejecutar Fase 2: Apuntes y Auditoría (Ollama)
     print("\n" + "="*50)
-    print("▶ FASE 2: Extracción de apuntes y control de alucinaciones")
+    print("[FASE 2] Extracción de apuntes y control de alucinaciones")
     print("="*50)
     
     cmd_apuntes = [
@@ -91,7 +98,7 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
     subprocess.run(cmd_apuntes, check=True, timeout=14400)
 
     print("\n" + "="*50)
-    print("🎉 FLUJO COMPLETADO CON ÉXITO")
+    print("[EXITO] FLUJO COMPLETADO CON ÉXITO")
     print(f"Todos los archivos de la sesión quedaron archivados en:\n{directorio_destino}")
     print("="*50)
 

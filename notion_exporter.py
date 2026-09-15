@@ -80,7 +80,7 @@ def markdown_a_bloques_notion(markdown_texto: str, materia: str = "", clase: str
         "callout": {
             "rich_text": crear_rich_text(
                 f"**{materia_fmt}** — {clase_fmt}\n"
-                f"Sintetizado localmente con Qwen 2.5 7B en Apple Silicon"
+                f"Sintetizado localmente con Qwen 2.5 7B (Multiplataforma)"
             ),
             "icon": {"type": "emoji", "emoji": "💻"},
             "color": "gray_background"

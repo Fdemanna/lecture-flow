@@ -11,7 +11,7 @@ CARPETA_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clases"
 os.makedirs(CARPETA_BASE, exist_ok=True)
 
 st.set_page_config(
-    page_title="Asistente DAW - Consola Local",
+    page_title="LectureFlow - Asistente de Estudio",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -175,7 +175,7 @@ st.html("""
     <span style="font-size: 24px;">🎓</span>
     <div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-weight: 700; color: #dae2fd; font-size: 1.05rem;">Asistente DAW</span>
+        <span style="font-weight: 700; color: #dae2fd; font-size: 1.05rem;">LectureFlow</span>
         <span style="font-size: 0.75rem; color: #908fa0;">/ Procesar</span>
       </div>
       <div style="display: flex; align-items: center; gap: 6px;">

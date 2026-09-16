@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -11,10 +12,11 @@ if sys.platform == "win32":
     except Exception:
         pass
 import streamlit as st
-from procesar_clase import normalizar_nombre
-from notion_exporter import exportar_a_notion
+from src.procesar_clase import normalizar_nombre
+from src.notion_exporter import exportar_a_notion
 
-CARPETA_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clases")
+ROOT_DIR = Path(__file__).resolve().parent
+CARPETA_BASE = str(ROOT_DIR / "clases")
 os.makedirs(CARPETA_BASE, exist_ok=True)
 
 st.set_page_config(
@@ -354,13 +356,13 @@ else:
                     caja_consola.code("[INFO] Se reutiliza 'transcripcion.txt' existente.", language="bash")
                 else:
                     barra_progreso.progress(15, text="Paso 1/2: Extrayendo PCM WAV y transcribiendo audio...")
-                    cmd_transcribir = [sys.executable, "-u", "transcribir.py", ruta_archivo_final, ruta_transcripcion]
+                    cmd_transcribir = [sys.executable, "-u", str(ROOT_DIR / "src" / "transcribir.py"), ruta_archivo_final, ruta_transcripcion]
                     ejecutar_paso_con_progreso(cmd_transcribir, caja_consola, estado_actual, "Paso 1/2: Whisper transcribiendo...")
                     barra_progreso.progress(50, text="Transcripción completada.")
 
                 # 2. Generación con Qwen 2.5
                 barra_progreso.progress(65, text="Paso 2/2: Sintetizando apuntes y auditando con Qwen 2.5...")
-                cmd_apuntes = [sys.executable, "-u", "generar_apuntes.py", ruta_transcripcion, ruta_apuntes]
+                cmd_apuntes = [sys.executable, "-u", str(ROOT_DIR / "src" / "generar_apuntes.py"), ruta_transcripcion, ruta_apuntes]
                 ejecutar_paso_con_progreso(cmd_apuntes, caja_consola, estado_actual, "Paso 2/2: Síntesis Map-Reduce...")
 
                 barra_progreso.progress(100, text="¡Completado con éxito!")

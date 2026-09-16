@@ -10,13 +10,15 @@ Diseño pulido y optimizado para estudio técnico:
 """
 
 import os
+from pathlib import Path
 import re
 from typing import Optional, Tuple
 import requests
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(dotenv_path=ROOT_DIR / ".env")
 except ImportError:
     pass
 

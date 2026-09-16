@@ -7,6 +7,7 @@ Incluye:
 - Backup preventivo automático antes de sobrescribir apuntes.md (I-7).
 - Auditoría automática de fidelidad y alucinaciones (Critic-Loop).
 """
+from __future__ import annotations
 
 from datetime import datetime
 import os

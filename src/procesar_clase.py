@@ -11,6 +11,7 @@ Uso directo por argumentos:
 """
 
 import os
+from pathlib import Path
 import sys
 import shutil
 import subprocess
@@ -22,7 +23,8 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-CARPETA_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clases")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+CARPETA_BASE = str(ROOT_DIR / "clases")
 
 def normalizar_nombre(texto: str) -> str:
     """Elimina caracteres problemáticos para carpetas del sistema."""
@@ -78,7 +80,7 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
     
     cmd_transcribir = [
         sys.executable,
-        "transcribir.py",
+        str(Path(__file__).resolve().parent / "transcribir.py"),
         ruta_archivo_en_carpeta,
         ruta_transcripcion
     ]
@@ -91,7 +93,7 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
     
     cmd_apuntes = [
         sys.executable,
-        "generar_apuntes.py",
+        str(Path(__file__).resolve().parent / "generar_apuntes.py"),
         ruta_transcripcion,
         ruta_apuntes
     ]

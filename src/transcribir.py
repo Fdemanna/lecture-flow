@@ -18,10 +18,12 @@ if platform.system() == "Windows":
     ]
     for ruta in rutas_dll:
         if os.path.isdir(ruta):
-            try:
-                os.add_dll_directory(ruta)
-            except (AttributeError, OSError):
-                pass
+            add_dll = getattr(os, "add_dll_directory", None)
+            if callable(add_dll):
+                try:
+                    add_dll(ruta)
+                except OSError:
+                    pass
             os.environ["PATH"] = ruta + os.pathsep + os.environ.get("PATH", "")
 
 def extraer_audio_rapido(ruta_entrada: str, ruta_audio_temp: str):
@@ -107,7 +109,11 @@ def transcribir_archivo(ruta_entrada: str, ruta_salida: str = "transcripcion.txt
 
     finally:
         if archivo_temp and os.path.exists(archivo_temp):
-            os.remove(archivo_temp)
+            try:
+                os.remove(archivo_temp)
+            except OSError as e:
+                print(f"[AVISO] No se pudo eliminar el archivo temporal '{archivo_temp}': {e}", flush=True)
+
 
 if __name__ == "__main__":
     archivo_a_procesar = sys.argv[1] if len(sys.argv) > 1 else "clase_muestra.mp4"

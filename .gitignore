@@ -1,11 +1,37 @@
-venv/
-venv_win/
+# Byte-compiled / optimizados / caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Variables de entorno y credenciales
+.env
 *.env
+.env.*
 .streamlit/secrets.toml
-clases/
+
+# Entornos virtuales
+venv/
+venv_*/
+
+# Backups del proyecto
+backups/
+
+# Archivos pesados y formatos multimedia
 *.mp4
 *.mkv
-*.wav
+*.mov
+*.avi
 *.mp3
-__pycache__/
+*.m4a
+*.wav
+*.bak-*
+
+# Directorio de clases: ignorar archivos generados manteniendo los .gitkeep
+clases/*
+!clases/**/.gitkeep
+
+# Sistema operativo
 .DS_Store
+Thumbs.db

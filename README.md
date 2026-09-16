@@ -1,6 +1,6 @@
 # 🎓 LectureFlow
 
-> **Transforma grabaciones de clases (audio/vídeo) en apuntes interactivos en Notion — 100% local con Apple Silicon (Metal) y NVIDIA CUDA.**
+> **Transforma grabaciones de clases y vídeos largos en apuntes técnicos estructurados en Notion — 100% local, privado y sin terminal.**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
@@ -8,6 +8,32 @@
 [![LLM Engine](https://img.shields.io/badge/LLM-Qwen%202.5%20(Ollama)-green.svg)]()
 [![Integration](https://img.shields.io/badge/Integration-Notion%20API-black.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+---
+
+## 📖 Descripción del Proyecto
+
+**LectureFlow** es un pipeline local *"Zero-Terminal"* diseñado para automatizar la transformación de grabaciones de clases y vídeos de larga duración en apuntes técnicos estructurados, enriquecidos y listos para estudiar en **Notion**.
+
+### 💡 El Problema que Resuelve
+Tomar apuntes a mano durante clases u horas de contenido denso requiere una atención constante que dificulta la comprensión en tiempo real. Por otro lado, delegar este trabajo en servicios SaaS o APIs de pago en la nube genera costes recurrentes elevados y plantea problemas sobre la privacidad de tus datos. **LectureFlow elimina ambos obstáculos:** procesa grabaciones de cualquier duración en tu propio ordenador, de forma gratuita, ilimitada y 100% confidencial.
+
+### 🔄 Flujo de Trabajo
+```mermaid
+graph LR
+    A[🎥 Audio / Vídeo Clase] --> B[🎙️ Transcripción Whisper<br/>large-v3-turbo]
+    B --> C[🧠 Síntesis Estratégica<br/>LLM Local via Ollama]
+    C --> D[📝 Exportación Directa<br/>Notion API]
+```
+1. **Transcripción**: Extracción de audio PCM (FFmpeg) y transcripción de alta precisión con **Whisper** (`large-v3-turbo`).
+2. **Síntesis Estratégica**: Generación de apuntes técnicos organizados, glosarios y resúmenes mediante un **LLM local** (*Ollama / Qwen 2.5*).
+3. **Exportación a Notion**: Envío automático de los apuntes formateados con bloques interactivos a tu base de datos de Notion.
+
+### ⭐ Diferenciales Clave
+- 🔒 **Privacidad Total**: Proceso 100% local. Tu audio, transcripciones y apuntes jamás salen de tu máquina hacia servidores de terceros.
+- ⚡ **Aceleración Nativa Dual**: Soporte optimizado tanto para hardware Apple Silicon (**Metal** vía `mlx-whisper`) en macOS como GPUs NVIDIA (**CUDA**) en Windows.
+- ⏱️ **Marcas de Tiempo Interactivas**: Timestamps sincronizados en los apuntes para auditar o repasar momentos específicos del vídeo original al instante.
+- 🚀 **Zero-Terminal**: Lanzadores ejecutables para macOS y Windows que permiten usar la herramienta sin interactuar con la consola de comandos en el día a día.
 
 ---
 

@@ -37,6 +37,22 @@ graph LR
 
 ---
 
+## 💡 Por qué nació LectureFlow
+
+Este proyecto no surgió como un ejercicio teórico de laboratorio, sino como una herramienta de supervivencia real.
+
+Mi compañero y yo estamos cursando el ciclo superior de **Desarrollo de Aplicaciones Web (DAW)** mientras trabajamos jornadas completas de 8 a 10 horas diarias en hostelería. Cuando sales de un turno agotador de pie, con la cabeza cargada y entras a una clase técnica de programación o bases de datos, te enfrentas a un dilema absurdo: o te dejas las pocas energías que te quedan en teclear a toda prisa apuntes que luego ni entiendes, o intentas prestar atención a la explicación del profesor y pierdes la mitad de los detalles técnicos.
+
+Llegábamos reventados, y tomar notas a mano era una batalla perdida contra el cansancio. 
+
+Nos preguntamos: **¿por qué no dejar que la máquina haga el trabajo pesado?** 
+
+Queríamos poder sentarnos a escuchar, razonar la lógica del código y entender los conceptos en directo, sabiendo que una herramienta se encargaría de documentar la lección con fidelidad. No queríamos servicios de pago con suscripciones mensuales ni subir las clases privadas a servidores de terceros; necesitábamos un sistema que corriera en nuestros propios ordenadores, que aprovechara nuestra GPU local al volver a casa y que al día siguiente nos dejara en Notion unos apuntes estructurados, con bloques de código limpios y marcas de tiempo exactas para repasar justo lo que no quedó claro.
+
+Así nació **LectureFlow**: una herramienta construida desde la trinchera para cambiar el cansancio por foco y transformar horas de clase en material de estudio listo para usar.
+
+---
+
 ## 📌 Requisitos Previos
 
 Antes de ejecutar la instalación rápida, asegúrate de tener instalado en tu sistema:

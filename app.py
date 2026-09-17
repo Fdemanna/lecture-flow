@@ -14,6 +14,7 @@ if sys.platform == "win32":
 import streamlit as st
 from src.procesar_clase import normalizar_nombre
 from src.notion_exporter import exportar_a_notion
+from src.auditor import auditar_apuntes
 
 ROOT_DIR = Path(__file__).resolve().parent
 CARPETA_BASE = str(ROOT_DIR / "clases")
@@ -243,11 +244,52 @@ if st.session_state["clase_seleccionada"] and st.session_state["materia_seleccio
         else:
             st.warning("Apuntes pendientes de generación.")
     with tab2:
-        if os.path.exists(auditoria_path):
-            with open(auditoria_path, "r", encoding="utf-8") as f:
-                st.markdown(f.read())
+        if os.path.exists(apuntes_path):
+            with open(apuntes_path, "r", encoding="utf-8") as _f:
+                _texto_md = _f.read()
+
+            _res = auditar_apuntes(_texto_md)
+
+            # --- Badge de estado global ---
+            if _res.es_valido:
+                st.html("""
+                <div style="display:inline-flex;align-items:center;gap:8px;
+                            background:#0d2e1f;border:1px solid #4edea3;
+                            border-radius:8px;padding:10px 18px;margin-bottom:12px;">
+                  <span style="font-size:1.3rem;">✅</span>
+                  <span style="color:#4edea3;font-weight:700;">Auditoría superada — sin errores</span>
+                </div>""")
+            else:
+                st.html("""
+                <div style="display:inline-flex;align-items:center;gap:8px;
+                            background:#2e0d0d;border:1px solid #e05c5c;
+                            border-radius:8px;padding:10px 18px;margin-bottom:12px;">
+                  <span style="font-size:1.3rem;">❌</span>
+                  <span style="color:#e05c5c;font-weight:700;">Auditoría fallida — revisa los errores</span>
+                </div>""")
+
+            # --- Métricas rápidas ---
+            _mc1, _mc2, _mc3 = st.columns(3)
+            _mc1.metric("Timestamps", _res.timestamps_detectados)
+            _mc2.metric("Cobertura de términos", f"{_res.cobertura_terminos:.0%}")
+            _mc3.metric("Errores críticos", len(_res.errores))
+
+            # --- Errores críticos ---
+            if _res.errores:
+                st.markdown("##### 🔴 Errores críticos")
+                for _err in _res.errores:
+                    st.error(_err)
+
+            # --- Advertencias ---
+            if _res.advertencias:
+                st.markdown("##### 🟡 Advertencias")
+                for _adv in _res.advertencias:
+                    st.warning(_adv)
+
+            if not _res.errores and not _res.advertencias:
+                st.success("Los apuntes superaron todas las reglas de validación sin advertencias.")
         else:
-            st.info("No hay auditoría generada.")
+            st.info("Genera los apuntes primero para ejecutar la auditoría determinista.")
     with tab3:
         if os.path.exists(transcripcion_path):
             with open(transcripcion_path, "r", encoding="utf-8") as f:

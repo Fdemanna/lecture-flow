@@ -16,6 +16,16 @@ import sys
 import shutil
 import subprocess
 
+# Importación robusta: funciona tanto cuando se invoca como módulo (from src.procesar_clase …)
+# como cuando se ejecuta directamente como script (python src/procesar_clase.py).
+try:
+    from src.auditor import auditar_apuntes
+except ModuleNotFoundError:
+    _ROOT = Path(__file__).resolve().parent.parent
+    if str(_ROOT) not in sys.path:
+        sys.path.insert(0, str(_ROOT))
+    from src.auditor import auditar_apuntes
+
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -86,11 +96,11 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
     ]
     subprocess.run(cmd_transcribir, check=True, timeout=14400)
 
-    # 3. Ejecutar Fase 2: Apuntes y Auditoría (Ollama)
+    # 3. Ejecutar Fase 2: Apuntes (Ollama)
     print("\n" + "="*50)
-    print("[FASE 2] Extracción de apuntes y control de alucinaciones")
+    print("[FASE 2] Extracción de apuntes (Síntesis Map-Reduce)")
     print("="*50)
-    
+
     cmd_apuntes = [
         sys.executable,
         str(Path(__file__).resolve().parent / "generar_apuntes.py"),
@@ -98,6 +108,36 @@ def ejecutar_pipeline(materia: str, nombre_clase: str, ruta_archivo_origen: str)
         ruta_apuntes
     ]
     subprocess.run(cmd_apuntes, check=True, timeout=14400)
+
+    # 4. Auditoría determinista (sustituye el critic-loop del LLM)
+    print("\n" + "="*50)
+    print("[FASE 3] Auditoría determinista de apuntes")
+    print("="*50)
+
+    if os.path.exists(ruta_apuntes):
+        with open(ruta_apuntes, "r", encoding="utf-8") as _f:
+            _texto_apuntes = _f.read()
+
+        _resultado = auditar_apuntes(_texto_apuntes)
+
+        if not _resultado.es_valido:
+            print("\n[AUDITORÍA] ⚠️  Se detectaron errores críticos en los apuntes:",
+                  file=sys.stderr)
+            for _err in _resultado.errores:
+                print(f"  ✗ {_err}", file=sys.stderr)
+        else:
+            print("[AUDITORÍA] ✔ Apuntes validados correctamente.")
+
+        if _resultado.advertencias:
+            print("\n[AUDITORÍA] 💡 Advertencias:")
+            for _adv in _resultado.advertencias:
+                print(f"  ⚠  {_adv}")
+
+        print(f"[AUDITORÍA] Timestamps detectados : {_resultado.timestamps_detectados}")
+        print(f"[AUDITORÍA] Cobertura de términos : {_resultado.cobertura_terminos:.0%}")
+    else:
+        print("[AUDITORÍA] No se encontró el archivo de apuntes para auditar.",
+              file=sys.stderr)
 
     print("\n" + "="*50)
     print("[EXITO] FLUJO COMPLETADO CON ÉXITO")

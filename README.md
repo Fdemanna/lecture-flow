@@ -1,195 +1,261 @@
-# 🎓 LectureFlow
+# LectureFlow
 
-> **Transforma grabaciones de clases y vídeos largos en apuntes técnicos estructurados en Notion — 100% local, privado y sin terminal.**
+Pipeline local sin terminal para transcribir grabaciones de clase, generar apuntes estructurados mediante un LLM local y exportarlos a Notion. El procesamiento se ejecuta íntegramente en el equipo del usuario usando Whisper `large-v3-turbo` y Ollama/Qwen 2.5 7B; ningún dato de audio o texto sale a servidores externos.
 
-[![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
-[![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20Modular%20src-blueviolet.svg)]()
-[![Transcription Engine](https://img.shields.io/badge/Transcription-MLX%20Whisper%20%7C%20Faster--Whisper-orange.svg)]()
-[![LLM Engine](https://img.shields.io/badge/LLM-Qwen%202.5%20(Ollama)-green.svg)]()
-[![Integration](https://img.shields.io/badge/Integration-Notion%20API-black.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## 📖 Descripción del Proyecto
+## Índice
 
-**LectureFlow** es una solución integral y modular diseñada bajo los principios de *Clean Architecture* para automatizar la transcripción, síntesis técnica y exportación a **Notion** de clases grabadas, ponencias y vídeos de larga duración.
-
-El sistema opera bajo una filosofía **Zero-Terminal**: cualquier estudiante o desarrollador puede clonar el repositorio, ejecutar el asistente mediante accesos directos de un solo clic y gestionar todo el flujo desde una moderna interfaz web en **Streamlit**, sin tocar la consola de comandos en su día a día.
-
-### 💡 El Problema que Resuelve
-Tomar apuntes manuales durante sesiones técnicas de varias horas exige un esfuerzo cognitivo continuo que reduce drásticamente la capacidad de asimilar conceptos complejos en directo. Por otra parte, recurrir a herramientas comerciales SaaS o APIs en la nube conlleva costes por minuto inasumibles para un estudiante, cuotas mensuales recurrentes y la cesión de grabaciones privadas a servidores externos.
-
-**LectureFlow derriba ambas barreras:**
-- **Ilimitado y gratuito:** Procesa horas de vídeo sin coste por token ni límites de suscripción.
-- **100% Confidencial:** Toda la inferencia (audio y texto) ocurre en tu hardware local.
-- **Rigor técnico:** Genera resúmenes estructurados, glosarios explicativos, ejemplos del profesor con timestamps exactos y una auditoría automatizada contra alucinaciones.
+- [Contexto del proyecto](#contexto-del-proyecto)
+- [Arquitectura del pipeline](#arquitectura-del-pipeline)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Requisitos del sistema](#requisitos-del-sistema)
+- [Instalación y configuración](#instalación-y-configuración)
+- [Uso](#uso)
+- [Tecnologías](#tecnologías)
+- [Licencia](#licencia)
 
 ---
 
-## 🔄 Diagrama de Flujo del Pipeline
+## Contexto del proyecto
+
+LectureFlow se desarrolló durante el ciclo formativo de Grado Superior de **Desarrollo de Aplicaciones Web (DAW)** compaginado con jornadas de trabajo de 8 a 10 horas diarias en hostelería. En ese contexto, tomar apuntes manuales durante sesiones técnicas de varias horas dejaba de ser viable sin comprometer la comprensión activa en clase.
+
+La necesidad concreta era disponer de un sistema que:
+
+- Grabara la clase y generara documentación técnica estructurada sin intervención manual.
+- Funcionara sin suscripciones ni APIs de pago externas.
+- Ejecutara toda la inferencia localmente, aprovechando la GPU disponible (Metal en Apple Silicon, CUDA en Windows).
+
+El resultado es una herramienta de uso personal, sin dependencias de servicios cloud, que genera apuntes en Markdown exportables directamente a una base de datos de Notion.
+
+---
+
+## Arquitectura del pipeline
+
+El pipeline se compone de tres fases secuenciales, cada una encapsulada en un módulo del paquete `src/`.
 
 ```mermaid
 flowchart TD
-    subgraph ENTRADA["📥 Entrada Multimedia"]
-        A["🎥 Grabación de Clase<br/>(MP4, MKV, MOV, MP3, WAV)"]
+    subgraph INPUT["Entrada"]
+        A["Archivo multimedia<br/>(MP4, MKV, MOV, MP3, M4A, WAV)"]
     end
 
-    subgraph INTERFAZ["🖥️ Capa de Presentación y Orquestación"]
-        B["app.py (Streamlit Web UI)<br/>o src/procesar_clase.py (CLI)"]
+    subgraph ORCHESTRATION["Orquestación"]
+        B["app.py — Streamlit UI<br/>src/procesar_clase.py — CLI"]
     end
 
-    subgraph FASE1["🎙️ Fase 1: Transcripción (src/transcribir.py)"]
-        C["🎵 FFmpeg<br/>Extracción PCM 16kHz WAV"] --> D{"Plataforma / Hardware"}
-        D -->|macOS Apple Silicon| E["⚡ MLX-Whisper<br/>GPU Metal (M1-M4)"]
-        D -->|Windows / Linux| F["🚀 Faster-Whisper<br/>NVIDIA CUDA (float16) / CPU (int8)"]
-        E --> G["📄 transcripcion.txt<br/>(con Timestamps [HH:MM:SS])"]
+    subgraph PHASE1["Fase 1: Transcripcion  (src/transcribir.py)"]
+        C["FFmpeg — extraccion PCM mono 16 kHz"] --> D{"Hardware"}
+        D -->|"macOS Apple Silicon"| E["mlx-whisper — GPU Metal"]
+        D -->|"Windows / Linux"| F["faster-whisper — CUDA float16 / CPU int8"]
+        E --> G["transcripcion.txt con marcas HH:MM:SS"]
         F --> G
     end
 
-    subgraph FASE2["🧠 Fase 2: Síntesis y Auditoría (src/generar_apuntes.py)"]
-        H["Ollama Local<br/>(Qwen 2.5 7B)"]
-        G --> I["Chunking Inteligente<br/>(~9.000 chars)"]
-        I --> H
-        H --> J["Unificación Map-Reduce<br/>+ Critic-Loop de Fidelidad"]
-        J --> K["📝 apuntes.md<br/>(Estructurado con Glosario y Ejemplos)"]
-        J --> L["🔍 auditoria.md<br/>(Reporte anti-alucinaciones)"]
+    subgraph PHASE2["Fase 2: Sintesis  (src/generar_apuntes.py)"]
+        G --> H["Chunking por caracteres (~9 000 ch)"]
+        H --> I["Ollama — Qwen 2.5 7B"]
+        I --> J["Unificacion Map-Reduce"]
+        J --> K["apuntes.md"]
+        J --> L["auditoria.md — critic-loop de fidelidad"]
     end
 
-    subgraph FASE3["☁️ Fase 3: Exportación Notion (src/notion_exporter.py)"]
-        K --> M["Notion API Client<br/>(Lotes de 100 bloques)"]
-        M --> N["📚 Base de Datos Notion<br/>(Callouts, Toggles, Bloques de Código)"]
+    subgraph PHASE3["Fase 3: Exportacion  (src/notion_exporter.py)"]
+        K --> M["Notion API — lotes de 100 bloques"]
+        M --> N["Base de datos Notion<br/>toggles, callouts, bloques de codigo"]
     end
 
-    A --> B
-    B --> C
-    G --> I
+    A --> B --> C
 ```
 
+### Fase 1 — Transcripcion (`src/transcribir.py`)
+
+1. FFmpeg extrae una pista de audio PCM mono a 16 kHz en un archivo `.wav` temporal.
+2. El modelo `large-v3-turbo` de Whisper transcribe el audio con streaming I/O: cada segmento se escribe en disco inmediatamente, lo que permite procesar clases de más de dos horas sin mantener toda la transcripción en memoria.
+3. Cada línea del archivo de salida incluye una marca de tiempo `[HH:MM:SS]` para facilitar la auditoría posterior.
+4. El motor de inferencia se selecciona según la plataforma:
+   - **macOS Apple Silicon**: `mlx-whisper`, que utiliza el acelerador Metal y la memoria unificada de los chips M1–M4.
+   - **Windows / Linux**: `faster-whisper` sobre CUDA 12 con `compute_type=float16`; si no hay GPU disponible, degrada automáticamente a `int8` en CPU.
+
+### Fase 2 — Sintesis y auditoria (`src/generar_apuntes.py`)
+
+1. La transcripción se divide en fragmentos de aproximadamente 9 000 caracteres con solapamiento de contexto para evitar cortes en mitad de explicaciones.
+2. Cada fragmento se procesa de forma independiente con Ollama/Qwen 2.5 7B, siguiendo un conjunto de reglas que preservan los timestamps, los ejemplos del profesor y el glosario técnico.
+3. Los bloques parciales se unifican mediante un paso Map-Reduce final que genera un documento `apuntes.md` coherente.
+4. Un segundo paso de auditoría (critic-loop) contrasta el resultado con la transcripción original y genera un informe `auditoria.md` con anotaciones de fidelidad.
+
+### Fase 3 — Exportacion a Notion (`src/notion_exporter.py`)
+
+El módulo convierte el Markdown generado a la representación de bloques de la API de Notion v1:
+
+- Encabezados → `heading_1` / `heading_2` / `heading_3`
+- Citas de ejemplo del profesor → callout coloreado azul
+- Advertencias → callout coloreado naranja
+- Bloques de código → `code` con detección de lenguaje
+- Glosario y secciones extensas → `toggle` interactivo
+
+Las llamadas a la API se agrupan en lotes de 100 bloques para respetar el límite de la API de Notion.
+
 ---
 
-## 💡 Por qué nació LectureFlow
-
-Este proyecto no surgió como un ejercicio teórico de laboratorio, sino como una herramienta de supervivencia real.
-
-Mi compañero y yo estamos cursando el ciclo superior de **Desarrollo de Aplicaciones Web (DAW)** mientras trabajamos jornadas completas de 8 a 10 horas diarias en hostelería. Cuando sales de un turno agotador de pie, con la cabeza cargada y entras a una clase técnica de programación o bases de datos, te enfrentas a un dilema absurdo: o te dejas las pocas energías que te quedan en teclear a toda prisa apuntes que luego ni entiendes, o intentas prestar atención a la explicación del profesor y pierdes la mitad de los detalles técnicos.
-
-Llegábamos reventados, y tomar notas a mano era una batalla perdida contra el cansancio. 
-
-Nos preguntamos: **¿por qué no dejar que la máquina haga el trabajo pesado?** 
-
-Queríamos poder sentarnos a escuchar, razonar la lógica del código y entender los conceptos en directo, sabiendo que una herramienta se encargaría de documentar la lección con fidelidad. No queríamos servicios de pago con suscripciones mensuales ni subir las clases privadas a servidores de terceros; necesitábamos un sistema que corriera en nuestros propios ordenadores, que aprovechara nuestra GPU local al volver a casa y que al día siguiente nos dejara en Notion unos apuntes estructurados, con bloques de código limpios y marcas de tiempo exactas para repasar justo lo que no quedó claro.
-
-Así nació **LectureFlow**: una herramienta construida desde la trinchera para cambiar el cansancio por foco y transformar horas de clase en material de estudio listo para usar.
-
----
-
-## 📁 Estructura del Proyecto
-
-El repositorio adopta una arquitectura modular limpia con el código fuente desacoplado en el paquete `src/`, manteniendo puntos de entrada directos y lanzadores en la raíz:
+## Estructura del repositorio
 
 ```text
 asistente-daw/
-├── app.py                      # Interfaz web principal y dashboard (Streamlit)
-├── Iniciar_Mac.command          # Lanzador 1-click para macOS (Zero-Terminal)
-├── Iniciar_Windows.vbs         # Lanzador 1-click silencioso para Windows (Zero-Terminal)
-├── requirements-mac.txt        # Dependencias de macOS (mlx-whisper, torch, streamlit)
-├── requirements-win.txt        # Dependencias de Windows (faster-whisper, cuda dlls)
-├── .env.example                # Plantilla para tokens y base de datos de Notion
-├── .gitignore                  # Exclusiones blindadas (archivos pesados, .env, venv)
-├── clases/                     # Repositorio local de asignaturas y clases procesadas
-│   └── .gitkeep                # Preserva la estructura en el control de versiones
-├── scripts/                    # Instaladores desatendidos y utilidades de arranque
-│   ├── setup_mac.command       # Instalador automático para macOS
-│   ├── setup_mac.sh            # Script bash de instalación y comprobación de Homebrew/FFmpeg
-│   ├── setup_windows.bat       # Instalador batch para Windows (winget, venv, CUDA)
-│   └── lanzador_win.bat        # Inicializador de Ollama y servidor Streamlit en Windows
-├── src/                        # Paquete modular del núcleo de la aplicación
-│   ├── __init__.py             # Inicializador y exports del paquete Python
-│   ├── transcribir.py          # Extracción con FFmpeg y transcripción (Whisper large-v3-turbo)
-│   ├── generar_apuntes.py      # Síntesis Map-Reduce, troceo de texto y critic-loop (Ollama)
-│   ├── procesar_clase.py       # Orquestador del pipeline y gestión de rutas/carpetas
-│   └── notion_exporter.py      # Conversor Markdown a bloques Notion con división en lotes
-├── CONTRIBUTING.md             # Directrices de colaboración y desarrollo
-├── LICENSE                     # Licencia MIT
-└── README.md                   # Documentación oficial del proyecto
+├── app.py                      # Punto de entrada — Streamlit UI
+├── Iniciar_Mac.command         # Lanzador de un clic para macOS
+├── Iniciar_Windows.vbs         # Lanzador silencioso para Windows
+├── requirements-mac.txt        # Dependencias macOS
+├── requirements-win.txt        # Dependencias Windows
+├── .env.example                # Plantilla de variables de entorno
+├── .gitignore
+├── clases/                     # Salida local por materia y clase
+│   └── .gitkeep
+├── scripts/
+│   ├── setup_mac.command       # Instalador macOS (crea venv, verifica Homebrew/FFmpeg)
+│   ├── setup_mac.sh
+│   ├── setup_windows.bat       # Instalador Windows (crea venv_win, verifica CUDA/FFmpeg)
+│   └── lanzador_win.bat        # Arranca Ollama y el servidor Streamlit en Windows
+├── src/
+│   ├── __init__.py
+│   ├── transcribir.py          # Fase 1 — extraccion de audio y transcripcion Whisper
+│   ├── generar_apuntes.py      # Fase 2 — sintesis LLM y critic-loop
+│   ├── procesar_clase.py       # Orquestador CLI del pipeline completo
+│   └── notion_exporter.py      # Fase 3 — exportacion a la API de Notion
+├── CONTRIBUTING.md
+├── LICENSE
+└── README.md
 ```
 
 ---
 
-## 📌 Requisitos Previos
+## Requisitos del sistema
 
-1. **Python 3.10+**: [python.org](https://www.python.org/downloads/) *(En Windows, asegúrate de marcar la casilla "Add Python to PATH")*.
-2. **FFmpeg**: Requerido para la extracción de audio PCM a 16 kHz. *(Los instaladores automáticos en `scripts/` intentarán instalarlo mediante `winget` en Windows o `brew` en macOS)*.
-3. **Ollama**: Descárgalo desde [ollama.com](https://ollama.com) y descarga el modelo Qwen 2.5:
-   ```bash
-   ollama run qwen2.5:7b
-   ```
-   *(También compatible con `ollama run qwen2.5:latest`)*.
+### Comunes
 
----
+| Requisito | Version minima | Notas |
+|-----------|---------------|-------|
+| Python | 3.10 | Añadir al PATH en Windows |
+| FFmpeg | cualquiera estable | Instalado por los scripts de setup |
+| Ollama | cualquiera estable | [ollama.com](https://ollama.com) |
 
-## 🚀 Instalación y Puesta en Marcha (Zero-Terminal)
+### Windows (NVIDIA CUDA)
 
-### 🪟 Windows (NVIDIA CUDA / CPU)
+| Requisito | Detalle |
+|-----------|---------|
+| CUDA Toolkit | 12.x |
+| VRAM recomendada | 4 GB para `float16`; con menos, el sistema degrada a `int8` en CPU |
+| Driver NVIDIA | compatible con CUDA 12 |
 
-1. **Configuración Inicial (Solo una vez):**
-   - Haz doble clic en el archivo `scripts/setup_windows.bat`.
-   - El script creará el entorno virtual `venv_win`, instalará librerías CUDA de NVIDIA (`cublas`, `cudnn`), dependencias de `requirements-win.txt` y verificará FFmpeg.
-2. **Uso Diario:**
-   - Haz doble clic en `Iniciar_Windows.vbs` para iniciar Ollama, levantar el servidor Streamlit en segundo plano y abrir automáticamente el navegador.
+### macOS (Apple Silicon)
 
-### 🍎 macOS (Apple Silicon / Metal)
-
-1. **Configuración Inicial (Solo una vez):**
-   - Haz doble clic en `scripts/setup_mac.command` (o ejecuta `bash scripts/setup_mac.sh`).
-   - El script creará el entorno virtual `venv`, instalará `mlx-whisper` optimizado para GPU Metal (chips M1 a M4) y verificará FFmpeg.
-2. **Uso Diario:**
-   - Haz doble clic en `Iniciar_Mac.command` para arrancar la interfaz web.
+| Requisito | Detalle |
+|-----------|---------|
+| Chip | M1, M2, M3 o M4 |
+| Memoria unificada | 8 GB minimo; 16 GB recomendado para clases largas |
+| Homebrew | para instalar FFmpeg automaticamente |
 
 ---
 
-## 🔑 Configuración de Notion API
+## Instalacion y configuracion
 
-1. Crea una integración interna en [Notion Developers - My Integrations](https://www.notion.so/my-integrations).
-2. Copia el **Internal Integration Secret**.
-3. En la base de datos de Notion destinada a tus clases:
-   - Haz clic en el botón de opciones `...` (arriba a la derecha) > **Conexiones** > Conecta tu integración.
-4. Genera tu archivo `.env` en la raíz copiando `.env.example`:
-   ```env
-   NOTION_TOKEN=ntn_xxxxxxxxxxxxxxxxxxxxxxxxx
-   NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   ```
+### 1. Clonar el repositorio
+
+```bash
+git clone https://github.com/<usuario>/asistente-daw.git
+cd asistente-daw
+```
+
+### 2. Ejecutar el instalador de dependencias
+
+**macOS:**
+
+```bash
+bash scripts/setup_mac.sh
+```
+
+O bien hacer doble clic en `scripts/setup_mac.command`.
+
+**Windows:**
+
+Doble clic en `scripts/setup_windows.bat`.
+
+El script crea el entorno virtual (`venv` en macOS, `venv_win` en Windows), instala las dependencias del archivo de requisitos correspondiente y verifica la presencia de FFmpeg.
+
+### 3. Descargar los modelos de Ollama
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+El modelo Whisper `large-v3-turbo` se descarga automáticamente en el primer uso.
+
+### 4. Configurar las credenciales de Notion
+
+Copiar `.env.example` a `.env` y rellenar los valores:
+
+```bash
+cp .env.example .env
+```
+
+```env
+NOTION_TOKEN=ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Para obtener estos valores:
+
+1. Acceder a [notion.so/my-integrations](https://www.notion.so/my-integrations) y crear una integración interna.
+2. Copiar el **Internal Integration Secret** como valor de `NOTION_TOKEN`.
+3. Abrir la base de datos de Notion de destino, seleccionar "Conexiones" en el menu de opciones y conectar la integración creada.
+4. Copiar el ID de la base de datos desde la URL: `https://www.notion.so/<workspace>/<DATABASE_ID>?v=...`.
 
 ---
 
-## ✨ Características Técnicas Destacadas
+## Uso
 
-- **100% Local y Seguro**: Procesamiento íntegro sin envío de datos a servidores externos.
-- **Tolerancia a Clases Extensas**: Buffer streaming en tiempo real y timeout ampliado a 4 horas (14.400s) para clases de más de 2 horas.
-- **Critic-Loop Anti-Alucinaciones**: Cada conjunto de notas pasa por una auditoría automática de fidelidad que contrasta los apuntes generados contra la transcripción original.
-- **Rendimiento de Hardware Nativo**:
-  - **macOS:** Inferencia ultra-rápida en memoria unificada vía `mlx-whisper` (Apple Silicon).
-  - **Windows:** Aceleración `faster-whisper` en `cuda` (`float16`) con degradación suave a `cpu` (`int8`).
-- **Bloques Ricos en Notion**: Generación de toggles interactivos, callouts coloreados para advertencias y ejemplos, listas de control y bloques de código con sintaxis resaltada.
+### Lanzadores de un clic (modo habitual)
+
+| Sistema | Archivo |
+|---------|---------|
+| macOS | `Iniciar_Mac.command` — activa el entorno virtual y ejecuta `streamlit run app.py` |
+| Windows | `Iniciar_Windows.vbs` — inicia Ollama en segundo plano, lanza el servidor Streamlit y abre el navegador en `http://localhost:8501` |
+
+### Ejecucion manual
+
+```bash
+# Activar el entorno virtual
+source venv/bin/activate          # macOS
+venv_win\Scripts\activate.bat     # Windows
+
+# Iniciar la interfaz web
+streamlit run app.py
+
+# Ejecutar el pipeline completo desde CLI (sin interfaz)
+python src/procesar_clase.py "Nombre Materia" "Nombre Clase" ruta/archivo.mp4
+```
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
+## Tecnologias
 
-| Componente | Tecnología | Propósito |
-| :--- | :--- | :--- |
-| **Frontend & UI** | [Streamlit](https://streamlit.io/) | Dashboard interactivo, monitorización y vista previa |
-| **Audio Processing** | [FFmpeg](https://ffmpeg.org/) | Extracción de audio PCM mono 16kHz |
-| **Transcripción (macOS)** | [MLX Whisper](https://github.com/ml-explore/mlx-examples) | Transcripción acelerada por hardware Metal |
-| **Transcripción (Windows)** | [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper) | Transcripción acelerada por NVIDIA CUDA |
-| **Modelo Whisper** | `large-v3-turbo` | Máxima precisión fonética y puntuación en español |
-| **LLM Local** | [Ollama](https://ollama.com/) + Qwen 2.5 7B | Síntesis estructurada y auditoría técnica |
-| **Integración Notion** | [Notion API](https://developers.notion.com/) | Publicación estructurada en bloques nativos |
+| Componente | Tecnologia |
+|------------|-----------|
+| Interfaz web | [Streamlit](https://streamlit.io/) |
+| Extraccion de audio | [FFmpeg](https://ffmpeg.org/) — PCM mono 16 kHz |
+| Transcripcion macOS | [mlx-whisper](https://github.com/ml-explore/mlx-examples) — aceleracion Metal |
+| Transcripcion Windows | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — CUDA 12 / CPU |
+| Modelo de transcripcion | Whisper `large-v3-turbo` |
+| Inferencia LLM | [Ollama](https://ollama.com/) con Qwen 2.5 7B |
+| Exportacion | [Notion API v1](https://developers.notion.com/) |
 
 ---
 
-## 📄 Licencia
+## Licencia
 
-Este proyecto está bajo la Licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+MIT. Ver [LICENSE](LICENSE).

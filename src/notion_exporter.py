@@ -22,16 +22,11 @@ try:
 except ImportError:
     pass
 
-try:
-    import streamlit as st
-except ImportError:
-    st = None
-
-
 def obtener_credencial(clave: str) -> str:
     valor = os.getenv(clave)
-    if not valor and st is not None:
+    if not valor:
         try:
+            import streamlit as st
             if hasattr(st, "secrets") and clave in st.secrets:
                 valor = str(st.secrets[clave])
         except Exception:

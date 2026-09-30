@@ -396,6 +396,36 @@ APUNTES GENERADOS:
         print(f"Error durante la fase de auditoría: {e}")
 
 
+def descargar_modelo_ollama(modelo: str = MODEL) -> bool:
+    """Solicita a Ollama descargar inmediatamente el modelo de la VRAM
+    enviando keep_alive=0. Desaloja los ~6.5 GB de VRAM evitando colisiones OOM con Whisper.
+    """
+    print(f"\n[VRAM] Desalojando modelo '{modelo}' de la memoria...", end="", flush=True)
+    try:
+        ollama.generate(model=modelo, prompt="", keep_alive=0)
+        print(" descargado con éxito.", flush=True)
+        return True
+    except Exception as exc:
+        # Fallback vía API REST directa de Ollama
+        try:
+            import urllib.request
+            import json
+            req = urllib.request.Request(
+                "http://localhost:11434/api/generate",
+                data=json.dumps({"model": modelo, "keep_alive": 0}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    print(" descargado con éxito (HTTP fallback).", flush=True)
+                    return True
+        except Exception:
+            pass
+        print(f" no se pudo desalojar automáticamente: {exc}", flush=True)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # 6. Pipeline principal
 # ---------------------------------------------------------------------------
@@ -490,6 +520,8 @@ def generar_material_estudio(
         print(f"\n❌ ERROR CRÍTICO: {e}")
         print(f"📁 El material parcial generado se ha preservado en: {ruta_incompleta}")
         sys.exit(1)
+    finally:
+        descargar_modelo_ollama(MODEL)
 
 
 if __name__ == "__main__":

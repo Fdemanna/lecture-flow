@@ -15,6 +15,7 @@ from src.cola_manager import (
 )
 from src.orchestrator import PipelineOrchestrator, normalizar_nombre
 from src.downloader import es_url_remota
+from src.notion_exporter import notion_configurado
 from src.notificador import notificar_lote_completado
 from views.estilos import render_terminal_topbar
 from views.sidebar import MAPEO_ASIGNATURAS
@@ -297,7 +298,7 @@ def renderizar_vista_lotes(
 
                 ok = orq.procesar_trabajo_cola(
                     trabajo=siguiente,
-                    exportar_notion=False,
+                    exportar_notion=notion_configurado(),
                     cola_manager=cola,
                 )
 

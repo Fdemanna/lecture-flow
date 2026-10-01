@@ -12,6 +12,8 @@ Fases secuenciales:
 """
 from __future__ import annotations
 
+import html
+import logging
 import os
 import sys
 import time
@@ -29,13 +31,16 @@ from src.checkpoint_manager import (
 )
 from src.generar_apuntes import descargar_modelo_ollama, MODEL as MODELO_OLLAMA
 from src.auditor import auditar_apuntes, ResultadoAuditoria
-from src.notion_exporter import exportar_a_notion
+from src.notion_exporter import exportar_a_notion, notion_configurado
 from src.notificador import (
     notificar_clase_completada,
     notificar_error,
+    enviar_mensaje,
 )
 from src.cola_manager import ColaManager
 from src.downloader import descargar_audio, es_url_remota
+
+logger = logging.getLogger("orchestrator")
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CARPETA_BASE = ROOT_DIR / "clases"
@@ -267,9 +272,12 @@ class PipelineOrchestrator:
             self._emitir_progreso("auditoria", 90, "Auditoría completada.")
 
             # ---------------------------------------------------------------
+            # ---------------------------------------------------------------
             # FASE 4: Exportación Opcional a Notion
             # ---------------------------------------------------------------
             url_notion: Optional[str] = None
+            error_notion: Optional[str] = None
+
             if exportar_notion and texto_apuntes:
                 self._emitir_progreso("exportacion_notion", 92, "Paso 4/4: Sincronizando con base de datos de Notion...")
                 cp.avanzar_fase(FASE_EXPORTANDO)
@@ -278,7 +286,13 @@ class PipelineOrchestrator:
                     self._emitir_linea(f"\n[NOTION] Exportado exitosamente: {url_notion}\n")
                     self._emitir_progreso("exportacion_notion", 98, "Sincronizado con Notion.")
                 except Exception as exc_notion:
-                    self._emitir_linea(f"\n[NOTION] Advertencia al exportar: {exc_notion}\n")
+                    error_notion = str(exc_notion)
+                    logger.error(
+                        "Error al exportar a Notion para la clase '%s': %s",
+                        clase_clean, error_notion, exc_info=True
+                    )
+                    self._emitir_linea(f"\n[NOTION ERROR] Falló la exportación a Notion: {error_notion}\n")
+                    self._emitir_progreso("exportacion_notion", 95, f"⚠️ Error en Notion: {error_notion[:60]}")
 
             # Finalizar sesión de checkpoint
             cp.marcar_completado()
@@ -289,13 +303,26 @@ class PipelineOrchestrator:
             duracion_seg = int(time.monotonic() - t_inicio_total)
             duracion_str = f"{duracion_seg // 60}m {duracion_seg % 60}s"
 
-            notificar_clase_completada(
-                nombre_clase=clase_clean.replace("_", " "),
-                duracion=duracion_str,
-                url_notion=url_notion,
-            )
-
-            self._emitir_progreso("completado", 100, f"¡Clase '{clase_clean}' completada en {duracion_str}!")
+            if error_notion:
+                # Si falló Notion: no enviar mensaje triunfal general.
+                # Notificar advertencia específica de fallo de Notion por Telegram.
+                detalle_limpio = html.escape(error_notion[:300])
+                msg_aviso = (
+                    f"✅ Clase procesada localmente pero ⚠️ falló la exportación a Notion: {detalle_limpio}"
+                )
+                enviar_mensaje(msg_aviso)
+                self._emitir_progreso(
+                    "completado",
+                    100,
+                    f"Clase '{clase_clean}' procesada localmente (⚠️ falló Notion)."
+                )
+            else:
+                notificar_clase_completada(
+                    nombre_clase=clase_clean.replace("_", " "),
+                    duracion=duracion_str,
+                    url_notion=url_notion,
+                )
+                self._emitir_progreso("completado", 100, f"¡Clase '{clase_clean}' completada en {duracion_str}!")
 
             return {
                 "exito": True,
@@ -305,6 +332,7 @@ class PipelineOrchestrator:
                 "ruta_transcripcion": str(ruta_transcripcion),
                 "ruta_apuntes": str(ruta_apuntes),
                 "url_notion": url_notion,
+                "error_notion": error_notion,
                 "duracion": duracion_str,
                 "duracion_seg": duracion_seg,
                 "auditoria": res_auditoria,
@@ -326,6 +354,7 @@ class PipelineOrchestrator:
                 "ruta_transcripcion": str(ruta_transcripcion),
                 "ruta_apuntes": str(ruta_apuntes),
                 "url_notion": None,
+                "error_notion": None,
                 "duracion": None,
                 "duracion_seg": int(time.monotonic() - t_inicio_total),
                 "auditoria": None,
@@ -335,13 +364,16 @@ class PipelineOrchestrator:
     def procesar_trabajo_cola(
         self,
         trabajo: dict,
-        exportar_notion: bool = False,
+        exportar_notion: Optional[bool] = None,
         cola_manager: Optional[ColaManager] = None,
     ) -> bool:
         """Procesa de forma atómica un trabajo de la cola persistente.
 
         Actualiza su estado a 'en_progreso' y posteriormente a 'completado' o 'error'.
         """
+        if exportar_notion is None:
+            exportar_notion = notion_configurado()
+
         trabajo_id = trabajo.get("id")
         video_path = trabajo.get("video_path", "")
         materia = trabajo.get("materia", "General")

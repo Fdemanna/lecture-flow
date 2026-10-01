@@ -12,7 +12,9 @@ Diseño pulido y optimizado para estudio técnico:
 import os
 from pathlib import Path
 import re
-from typing import Optional, Tuple
+import time
+import logging
+from typing import Optional, Tuple, List
 import requests
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -21,6 +23,9 @@ try:
     load_dotenv(dotenv_path=ROOT_DIR / ".env")
 except ImportError:
     pass
+
+logger = logging.getLogger("notion_exporter")
+
 
 def obtener_credencial(clave: str) -> str:
     valor = os.getenv(clave)
@@ -34,8 +39,25 @@ def obtener_credencial(clave: str) -> str:
     return valor or ""
 
 
+def notion_configurado() -> bool:
+    """Comprueba si las credenciales mínimas de Notion (Token y Database ID) están configuradas."""
+    token = obtener_credencial("NOTION_TOKEN")
+    db_id = obtener_credencial("NOTION_DATABASE_ID")
+    return bool(token and db_id)
+
+
+def _trocear_cadena(s: str, limite: int = 2000) -> List[str]:
+    """Divide un texto en segmentos que no superen el límite de caracteres de Notion."""
+    if not s:
+        return [""]
+    return [s[i:i + limite] for i in range(0, len(s), limite)]
+
+
 def crear_rich_text(texto: str) -> list:
-    """Parsea negritas (**bold**) y código (`inline`) a la estructura rich_text de Notion."""
+    """Parsea negritas (**bold**) y código (`inline`) a la estructura rich_text de Notion.
+
+    Garantiza que ningún fragmento supere los 2000 caracteres (límite estricto de Notion).
+    """
     patron = r"(\*\*.*?\*\*|`.*?`)"
     fragmentos = re.split(patron, texto)
     rich_text = []
@@ -44,22 +66,27 @@ def crear_rich_text(texto: str) -> list:
         if not frag:
             continue
         if frag.startswith("**") and frag.endswith("**"):
-            rich_text.append({
-                "type": "text",
-                "text": {"content": frag[2:-2][:2000]},
-                "annotations": {"bold": True}
-            })
+            contenido = frag[2:-2]
+            for trozo in _trocear_cadena(contenido, 2000):
+                rich_text.append({
+                    "type": "text",
+                    "text": {"content": trozo},
+                    "annotations": {"bold": True}
+                })
         elif frag.startswith("`") and frag.endswith("`"):
-            rich_text.append({
-                "type": "text",
-                "text": {"content": frag[1:-1][:2000]},
-                "annotations": {"code": True}
-            })
+            contenido = frag[1:-1]
+            for trozo in _trocear_cadena(contenido, 2000):
+                rich_text.append({
+                    "type": "text",
+                    "text": {"content": trozo},
+                    "annotations": {"code": True}
+                })
         else:
-            rich_text.append({
-                "type": "text",
-                "text": {"content": frag[:2000]}
-            })
+            for trozo in _trocear_cadena(frag, 2000):
+                rich_text.append({
+                    "type": "text",
+                    "text": {"content": trozo}
+                })
 
     return rich_text if rich_text else [{"type": "text", "text": {"content": texto[:2000]}}]
 
@@ -229,12 +256,13 @@ def markdown_a_bloques_notion(markdown_texto: str, materia: str = "", clase: str
                 "bash", "json", "java", "c", "cpp", "c#", "markdown", "plain text"
             ]
             lang_final = lenguaje if lenguaje in lenguajes_notion else "plain text"
+            trozos_codigo = _trocear_cadena(codigo_str, 2000)
 
             bloques.append({
                 "object": "block",
                 "type": "code",
                 "code": {
-                    "rich_text": [{"type": "text", "text": {"content": codigo_str[:2000]}}],
+                    "rich_text": [{"type": "text", "text": {"content": t}} for t in trozos_codigo],
                     "language": lang_final
                 }
             })
@@ -252,23 +280,106 @@ def markdown_a_bloques_notion(markdown_texto: str, materia: str = "", clase: str
     return bloques
 
 
+def _peticion_notion_con_reintentos(
+    metodo: str,
+    url: str,
+    headers: dict,
+    json_data: Optional[dict] = None,
+    max_reintentos: int = 4,
+) -> requests.Response:
+    """Ejecuta una petición a la API de Notion con manejo robusto de Rate Limit (429)
+
+    y diagnóstico explícito de errores de validación (400).
+    """
+    for intento in range(1, max_reintentos + 1):
+        try:
+            kwargs = {"json": json_data} if json_data is not None else {}
+            resp = requests.request(metodo, url, headers=headers, timeout=30, **kwargs)
+        except requests.RequestException as e:
+            if intento == max_reintentos:
+                logger.error("[NOTION RED] Fallo de conexión tras %d intentos (%s %s): %s", max_reintentos, metodo, url, e)
+                raise RuntimeError(f"Error de conexión con la API de Notion: {e}") from e
+            espera = 2.0 * intento
+            logger.warning("[NOTION RED] Error de conexión: %s. Reintentando en %.1fs (intento %d/%d)...", e, espera, intento, max_reintentos)
+            time.sleep(espera)
+            continue
+
+        if resp.status_code in (200, 201):
+            return resp
+
+        # HTTP 429: Rate limit de Notion
+        if resp.status_code == 429:
+            retry_after_str = resp.headers.get("Retry-After", "")
+            try:
+                espera = float(retry_after_str) if retry_after_str else (1.5 * intento)
+            except ValueError:
+                espera = 1.5 * intento
+            espera = max(1.0, espera)
+            logger.warning(
+                "[NOTION 429 Rate Limit] Límite de tasa alcanzado. Esperando %.1fs antes de reintentar (intento %d/%d)...",
+                espera, intento, max_reintentos
+            )
+            time.sleep(espera)
+            continue
+
+        # HTTP 400: Error de validación de estructura o propiedad
+        if resp.status_code == 400:
+            error_json = {}
+            try:
+                error_json = resp.json()
+            except Exception:
+                pass
+            codigo_error = error_json.get("code", "validation_error")
+            mensaje_error = error_json.get("message", resp.text)
+            logger.error(
+                "[NOTION 400 Validation Error] Error de validación en Notion (código: '%s'): %s",
+                codigo_error, mensaje_error
+            )
+            raise RuntimeError(f"Error de validación en Notion (HTTP 400 - {codigo_error}): {mensaje_error}")
+
+        # HTTP 5xx: Errores transitorios de servidor
+        if resp.status_code >= 500 and intento < max_reintentos:
+            espera = 2.0 * intento
+            logger.warning(
+                "[NOTION %d Server Error] Error interno en Notion. Reintentando en %.1fs (intento %d/%d)...",
+                resp.status_code, espera, intento, max_reintentos
+            )
+            time.sleep(espera)
+            continue
+
+        # Otros errores no recuperables (401 Unauthorized, 403 Forbidden, 404 Not Found, etc.)
+        logger.error("[NOTION HTTP %d] Respuesta de error de Notion: %s", resp.status_code, resp.text)
+        raise RuntimeError(f"Error de API Notion (HTTP {resp.status_code}): {resp.text}")
+
+    raise RuntimeError(f"Fallo en la petición a Notion tras {max_reintentos} intentos ({metodo} {url})")
+
+
 def obtener_esquema_base_datos(db_id: str, headers: dict) -> Tuple[str, Optional[str]]:
-    resp = requests.get(f"https://api.notion.com/v1/databases/{db_id}", headers=headers)
-    if resp.status_code != 200:
+    try:
+        resp = _peticion_notion_con_reintentos(
+            "GET",
+            f"https://api.notion.com/v1/databases/{db_id}",
+            headers=headers,
+            max_reintentos=2,
+        )
+        datos = resp.json().get("properties", {})
+        columna_titulo = "Name"
+        columna_materia = None
+
+        for nombre_prop, detalles in datos.items():
+            tipo = detalles.get("type")
+            if tipo == "title":
+                columna_titulo = nombre_prop
+            elif tipo == "select" and nombre_prop.lower() in ("materia", "asignatura", "subject"):
+                columna_materia = nombre_prop
+
+        return columna_titulo, columna_materia
+    except Exception as exc:
+        logger.warning(
+            "[NOTION] No se pudo consultar el esquema de la base de datos (%s). Usando esquema por defecto.",
+            exc
+        )
         return "Name", "Materia"
-
-    datos = resp.json().get("properties", {})
-    columna_titulo = "Name"
-    columna_materia = None
-
-    for nombre_prop, detalles in datos.items():
-        tipo = detalles.get("type")
-        if tipo == "title":
-            columna_titulo = nombre_prop
-        elif tipo == "select" and nombre_prop.lower() in ("materia", "asignatura", "subject"):
-            columna_materia = nombre_prop
-
-    return columna_titulo, columna_materia
 
 
 def exportar_a_notion(titulo_clase: str, materia: str, markdown_texto: str) -> str:
@@ -295,8 +406,15 @@ def exportar_a_notion(titulo_clase: str, materia: str, markdown_texto: str) -> s
         propiedades[col_materia] = {"select": {"name": materia.replace('_', ' ')}}
 
     bloques = markdown_a_bloques_notion(markdown_texto, materia=materia, clase=titulo_clase)
+    
+    # División en lotes de 100 bloques (límite estricto de la API de Notion)
     primer_lote = bloques[:100]
     lotes_adicionales = [bloques[i:i + 100] for i in range(100, len(bloques), 100)]
+
+    logger.info(
+        "[NOTION] Creando página '%s' en base de datos con %d bloques iniciales (total: %d)...",
+        titulo_clase, len(primer_lote), len(bloques)
+    )
 
     payload_creacion = {
         "parent": {"database_id": db_id_limpio},
@@ -305,19 +423,32 @@ def exportar_a_notion(titulo_clase: str, materia: str, markdown_texto: str) -> s
         "children": primer_lote
     }
 
-    resp = requests.post("https://api.notion.com/v1/pages", headers=headers, json=payload_creacion)
-
-    if resp.status_code not in (200, 201):
-        raise RuntimeError(f"Error de API Notion ({resp.status_code}): {resp.text}")
+    resp = _peticion_notion_con_reintentos(
+        "POST",
+        "https://api.notion.com/v1/pages",
+        headers=headers,
+        json_data=payload_creacion
+    )
 
     datos_pagina = resp.json()
     page_id = datos_pagina["id"]
     url_pagina = datos_pagina.get("url", f"https://notion.so/{page_id.replace('-', '')}")
 
-    for lote in lotes_adicionales:
+    # Enviar lotes adicionales de forma paginada (máximo 100 bloques por petición)
+    if lotes_adicionales:
         url_append = f"https://api.notion.com/v1/blocks/{page_id}/children"
-        resp_append = requests.patch(url_append, headers=headers, json={"children": lote})
-        if resp_append.status_code not in (200, 201):
-            print(f"Aviso: Falló el envío de un lote secundario: {resp_append.text}")
+        total_lotes = len(lotes_adicionales) + 1
+        for num_lote, lote in enumerate(lotes_adicionales, start=2):
+            logger.info(
+                "[NOTION] Enviando lote adicional %d/%d (%d bloques)...",
+                num_lote, total_lotes, len(lote)
+            )
+            _peticion_notion_con_reintentos(
+                "PATCH",
+                url_append,
+                headers=headers,
+                json_data={"children": lote}
+            )
 
+    logger.info("[NOTION] Exportación exitosa a Notion: %s", url_pagina)
     return url_pagina

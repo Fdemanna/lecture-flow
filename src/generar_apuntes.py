@@ -46,11 +46,22 @@ SYSTEM_PROMPT = (
     "Desarrollo de Aplicaciones Web (DAW). Tu tarea es transformar transcripciones de "
     "clases técnicas en material de estudio estructurado, riguroso y en Markdown, "
     "siguiendo con precisión milimétrica las directivas de fidelidad a la fuente, "
-    "timestamps y delimitación de ejemplos."
+    "timestamps y delimitación de ejemplos.\n\n"
+    "DIRECTIVAS ESTRICTAS DE PRIVACIDAD Y ENFOQUE PEDAGÓGICO:\n"
+    "- Prohibido incluir nombres propios de alumnos, profesores o menciones personales.\n"
+    "- Omite saludos iniciales, pausas de descanso, bromas, quejas sobre fechas de entrega o charlas informales del aula.\n"
+    "- Si un alumno plantea una duda técnica relevante durante la sesión, sintetízala como un bloque neutral: '💡 Duda frecuente / Error común' sin aludir a quién la formuló.\n"
+    "- Redacta con el tono sobrio, estructurado y formal de un libro de texto universitario o documentación técnica oficial."
 )
 
 REGLAS_MAESTRAS = """
 INSTRUCCIONES Y REGLAS ESTRICTAS:
+
+DIRECTIVAS ESTRICTAS DE PRIVACIDAD Y ENFOQUE PEDAGÓGICO:
+- Prohibido incluir nombres propios de alumnos, profesores o menciones personales.
+- Omite saludos iniciales, pausas de descanso, bromas, quejas sobre fechas de entrega o charlas informales del aula.
+- Si un alumno plantea una duda técnica relevante durante la sesión, sintetízala como un bloque neutral: '💡 Duda frecuente / Error común' sin aludir a quién la formuló.
+- Redacta con el tono sobrio, estructurado y formal de un libro de texto universitario o documentación técnica oficial.
 
 1. **Fuente única de verdad**: Usa exclusivamente la información contenida en la transcripción. No inventes ni completes con conocimiento externo salvo nota aclaratoria explícita. Si falta información o se corta, usa "❓ Contenido incompleto en este fragmento".
 2. **Estructura**: Usa encabezados (##, ###), listas, tablas o esquemas para ordenar el contenido.

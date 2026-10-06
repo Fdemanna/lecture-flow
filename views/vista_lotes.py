@@ -19,6 +19,8 @@ from src.notion_exporter import notion_configurado
 from src.notificador import notificar_lote_completado
 from views.estilos import render_terminal_topbar
 from views.sidebar import MAPEO_ASIGNATURAS
+from src.transcribir import MODELO_WHISPER
+from src.generar_apuntes import MODELO_LLM
 
 
 def renderizar_vista_lotes(
@@ -48,6 +50,14 @@ def renderizar_vista_lotes(
     st.markdown("#### 📦 Procesamiento por Lotes")
     st.caption("Encola múltiples grabaciones y procésalas de forma secuencial sin intervención manual.")
 
+    st.html(f"""
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; margin-top:6px;">
+      <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#4edea3; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:9999px;">● Procesamiento local</span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#94a3b8; background:#1c1f2a; border:1px solid rgba(255,255,255,0.08); padding:2px 8px; border-radius:9999px;">{MODELO_WHISPER} Local</span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8083ff; background:rgba(128,131,255,0.12); border:1px solid rgba(128,131,255,0.25); padding:2px 8px; border-radius:9999px;">{MODELO_LLM}</span>
+    </div>
+    """)
+
     if pendientes_previos and not st.session_state.get("cola_ejecutando"):
         st.warning(
             f"**Cola pendiente detectada.** Hay {len(pendientes_previos)} trabajo(s) sin completar "
@@ -69,14 +79,21 @@ def renderizar_vista_lotes(
     with st.expander("➕ Añadir archivos a la cola", expanded=not bool(pendientes_previos)):
         col_lotes_f1, col_lotes_f2 = st.columns(2)
         with col_lotes_f1:
-            mat_lotes_opts = [k for k in mapeo.keys() if k != "Otra"]
-            mats_carpetas = sorted([
-                d for d in os.listdir(carpeta_base_str)
-                if (carpeta_base / d).is_dir()
-            ])
-            mats_uniq = list(dict.fromkeys(mat_lotes_opts + mats_carpetas))
+            directorio_base = root_dir / "clases"
+            if directorio_base.exists():
+                asignaturas_reales_l = sorted([
+                    d.name for d in directorio_base.iterdir()
+                    if d.is_dir() and not d.name.startswith(".")
+                ])
+            else:
+                asignaturas_reales_l = []
+
             opcion_nueva_l = "➕ Nueva asignatura..."
-            mats_uniq.append(opcion_nueva_l)
+            if not asignaturas_reales_l:
+                mats_uniq = [opcion_nueva_l]
+            else:
+                mats_uniq = asignaturas_reales_l + [opcion_nueva_l]
+
             sel_mat_lotes = st.selectbox(
                 "Asignatura:",
                 mats_uniq,
@@ -96,8 +113,8 @@ def renderizar_vista_lotes(
             ).strip()
 
         archivos_lotes = st.file_uploader(
-            "Selecciona uno o varios archivos de vídeo/audio:",
-            type=["mp4", "mkv", "mp3", "m4a", "wav", "mov"],
+            "Selecciona uno o varios archivos de vídeo/audio o presentaciones:",
+            type=["mp4", "mkv", "mp3", "m4a", "wav", "mov", "pptx"],
             accept_multiple_files=True,
             key="fu_lotes",
         )

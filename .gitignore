@@ -38,3 +38,8 @@ Thumbs.db
 
 # Caché de pytest
 .pytest_cache/
+
+# Datos locales de estudio, cola y presentaciones
+data/
+cola_trabajo.json
+*.pptx

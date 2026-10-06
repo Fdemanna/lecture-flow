@@ -4,7 +4,6 @@ from views.estilos import (
     render_header,
     render_terminal_topbar,
     CSS_GLOBAL,
-    HTML_HEADER,
 )
 from views.sidebar import renderizar_sidebar, MAPEO_ASIGNATURAS
 from views.vista_individual import renderizar_vista_individual
@@ -24,7 +23,6 @@ __all__ = [
     "render_header",
     "render_terminal_topbar",
     "CSS_GLOBAL",
-    "HTML_HEADER",
     "renderizar_sidebar",
     "render_sidebar",
     "renderizar_vista_individual",

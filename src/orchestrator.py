@@ -13,6 +13,7 @@ Fases secuenciales:
 from __future__ import annotations
 
 import html
+import json
 import logging
 import os
 import sys
@@ -29,7 +30,11 @@ from src.checkpoint_manager import (
     FASE_EXPORTANDO,
     FASE_COMPLETADO,
 )
-from src.generar_apuntes import descargar_modelo_ollama, MODEL as MODELO_OLLAMA
+from src.generar_apuntes import (
+    descargar_modelo_ollama,
+    generar_preguntas_clase,
+    MODEL as MODELO_OLLAMA,
+)
 from src.auditor import auditar_apuntes, ResultadoAuditoria
 from src.notion_exporter import exportar_a_notion, notion_configurado
 from src.notificador import (
@@ -39,6 +44,7 @@ from src.notificador import (
 )
 from src.cola_manager import ColaManager
 from src.downloader import descargar_audio, es_url_remota
+from src.extractores_documentos import extraer_texto_pptx
 
 logger = logging.getLogger("orchestrator")
 
@@ -199,8 +205,11 @@ class PipelineOrchestrator:
         cp = CheckpointManager(str(directorio_destino), vid_path_str)
 
         try:
+            # Detección de presentación PowerPoint
+            es_presentacion_pptx = bool(vid_path_str and vid_path_str.lower().endswith(".pptx"))
+
             # ---------------------------------------------------------------
-            # FASE 1: Transcripción (Whisper)
+            # FASE 1: Transcripción / Extracción de Contenido
             # ---------------------------------------------------------------
             transcripcion_existe = ruta_transcripcion.exists() and ruta_transcripcion.stat().st_size > 0
 
@@ -209,6 +218,37 @@ class PipelineOrchestrator:
                     raise FileNotFoundError(f"Modo solo_apuntes solicitado pero no existe: {ruta_transcripcion}")
                 self._emitir_progreso("transcripcion", 50, "Paso 1/2 omitido: usando transcripcion.txt existente.")
                 self._emitir_linea(f"[INFO] Reutilizando transcripción existente ({ruta_transcripcion.stat().st_size:,} bytes)\n")
+            elif es_presentacion_pptx:
+                self._emitir_progreso("transcripcion", 15, "Paso 1/4: Extrayendo contenido de presentación PowerPoint (.pptx)...")
+                self._emitir_linea(f"[PPTX] Ingesta directa de diapositivas y notas: {Path(vid_path_str).name}\n")
+                
+                texto_extraido = extraer_texto_pptx(Path(vid_path_str))
+                
+                # Guardar en transcripcion.txt para que la fase de síntesis lo procese homogéneamente
+                with open(ruta_transcripcion, "w", encoding="utf-8") as f_txt:
+                    f_txt.write(texto_extraido)
+                
+                # Guardar también en contenido_base.txt y transcripcion.json para interoperabilidad
+                ruta_contenido_base = directorio_destino / "contenido_base.txt"
+                with open(ruta_contenido_base, "w", encoding="utf-8") as f_cb:
+                    f_cb.write(texto_extraido)
+                
+                ruta_trans_json = directorio_destino / "transcripcion.json"
+                with open(ruta_trans_json, "w", encoding="utf-8") as f_tj:
+                    json.dump(
+                        {
+                            "fuente": Path(vid_path_str).name,
+                            "tipo": "pptx",
+                            "tamano_caracteres": len(texto_extraido),
+                            "contenido": texto_extraido,
+                        },
+                        f_tj,
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                
+                self._emitir_linea(f"[PPTX] Extracción completada ({len(texto_extraido):,} caracteres). Transcripción de audio omitida.\n")
+                self._emitir_progreso("transcripcion", 50, "Extracción de PowerPoint completada con éxito.")
             elif transcripcion_existe and not forzar_transcripcion and not modo_reanudacion and not cp.existe_sesion_previa():
                 self._emitir_progreso("transcripcion", 50, "Paso 1/2 omitido: Transcripción previa detectada.")
                 self._emitir_linea(f"[INFO] Se reutiliza 'transcripcion.txt' ({ruta_transcripcion.name})\n")
@@ -230,9 +270,9 @@ class PipelineOrchestrator:
                 self._emitir_progreso("transcripcion", 50, "Transcripción completada con éxito.")
 
             # ---------------------------------------------------------------
-            # FASE 2: Síntesis Pedagógica con Qwen 2.5 (Ollama)
+            # FASE 2: Síntesis Pedagógica de Apuntes
             # ---------------------------------------------------------------
-            self._emitir_progreso("sintesis", 55, "Paso 2/4: Sintetizando apuntes estructurados con Qwen 2.5...")
+            self._emitir_progreso("sintesis", 55, "Paso 2/4: Sintetizando apuntes estructurados...")
             cp.avanzar_fase(FASE_SINTETIZANDO)
 
             cmd_apuntes = [
@@ -243,9 +283,10 @@ class PipelineOrchestrator:
             ]
             try:
                 self._ejecutar_subproceso_stream(cmd_apuntes)
-            finally:
-                # Descarga determinista de VRAM para evitar OOM con procesos concurrentes o posteriores
+            except Exception:
+                # Si falla la síntesis, desalojamos la VRAM por seguridad
                 descargar_modelo_ollama(MODELO_OLLAMA)
+                raise
 
             self._emitir_progreso("sintesis", 80, "Síntesis pedagógica completada.")
 
@@ -272,6 +313,32 @@ class PipelineOrchestrator:
             self._emitir_progreso("auditoria", 90, "Auditoría completada.")
 
             # ---------------------------------------------------------------
+            # EVALUACIÓN ACTIVA: Generación Desatendida de Preguntas (Quiz)
+            # ---------------------------------------------------------------
+            if texto_apuntes:
+                self._emitir_progreso("quiz", 91, "Paso 3.5/4: Generando banco de preguntas de evaluación activa...")
+                ruta_preguntas = directorio_destino / "preguntas.json"
+                try:
+                    preguntas_quiz = generar_preguntas_clase(
+                        texto_apuntes=texto_apuntes,
+                        materia=materia_clean,
+                        clase=clase_clean,
+                    )
+                    if preguntas_quiz:
+                        with open(ruta_preguntas, "w", encoding="utf-8") as f_quiz:
+                            json.dump(preguntas_quiz, f_quiz, indent=2, ensure_ascii=False)
+                        msg_quiz = "[QUIZ] Banco de 5 preguntas generado en preguntas.json"
+                        self._emitir_linea(f"\n{msg_quiz}\n")
+                        logger.info(msg_quiz)
+                except Exception as exc_quiz:
+                    logger.warning(
+                        "Fallo no crítico al generar preguntas para '%s': %s",
+                        clase_clean,
+                        exc_quiz,
+                        exc_info=True,
+                    )
+                    self._emitir_linea(f"\n[AVISO QUIZ] No se pudieron generar las preguntas: {exc_quiz}\n")
+                    descargar_modelo_ollama(MODELO_OLLAMA)
             # ---------------------------------------------------------------
             # FASE 4: Exportación Opcional a Notion
             # ---------------------------------------------------------------

@@ -4,10 +4,12 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import streamlit as st
 
 from src.notion_exporter import exportar_a_notion
 from src.auditor import auditar_apuntes
+from src.orchestrator import normalizar_nombre, es_ruta_segura
 
 TIMEOUT_SEGUNDOS = 14400  # 4 horas para clases largas
 
@@ -89,6 +91,138 @@ def renderizar_editor_apuntes(directorio_clase: Path) -> None:
             st.session_state["materia_seleccionada"] = None
             st.rerun()
 
+    carpeta_clases = directorio_clase.parent.parent
+
+    # =========================================================================
+    # GESTIÓN GRANULAR DE LA CLASE (Renombrar, Mover y Eliminar)
+    # =========================================================================
+    with st.expander("⚙️ Gestión de la clase", expanded=False):
+        tab_renombrar, tab_mover, tab_eliminar = st.tabs([
+            "✏️ Renombrar",
+            "📁 Mover de Asignatura",
+            "🗑️ Eliminar Clase",
+        ])
+
+        with tab_renombrar:
+            st.markdown("##### Renombrar esta clase")
+            nombre_actual_legible = cla.replace("_", " ")
+            nuevo_nombre_input = st.text_input(
+                "Nuevo nombre para la clase:",
+                value=nombre_actual_legible,
+                key="txt_renombrar_clase_input",
+            ).strip()
+
+            if st.button("Guardar nuevo nombre", use_container_width=True, key="btn_renombrar_clase_accion"):
+                caracteres_prohibidos = [c for c in r'/\:*?"<>|' if c in nuevo_nombre_input]
+                if caracteres_prohibidos:
+                    st.error(f"⚠️ El nombre contiene caracteres prohibidos: {' '.join(caracteres_prohibidos)}")
+                else:
+                    nuevo_slug = normalizar_nombre(nuevo_nombre_input)
+                    if not nuevo_slug:
+                        st.error("⚠️ El nombre de la clase no puede estar vacío.")
+                    elif nuevo_slug == cla:
+                        st.info("El nombre indicado es idéntico al actual.")
+                    else:
+                        carpeta_asignatura = directorio_clase.parent
+                        nuevo_dir_clase = carpeta_asignatura / nuevo_slug
+                        if not es_ruta_segura(nuevo_dir_clase, base=carpeta_clases):
+                            st.error("⚠️ La ruta de destino no es segura.")
+                        elif nuevo_dir_clase.exists():
+                            st.error(f"⚠️ Ya existe una clase llamada '{nuevo_slug}' en la asignatura '{mat.replace('_', ' ')}'.")
+                        else:
+                            try:
+                                shutil.move(str(directorio_clase), str(nuevo_dir_clase))
+                                st.session_state["clase_seleccionada"] = nuevo_slug
+                                st.success("✅ Clase renombrada correctamente.")
+                                time.sleep(0.5)
+                                st.rerun()
+                            except OSError as err:
+                                st.error(f"Error al renombrar el directorio: {err}")
+
+        with tab_mover:
+            st.markdown("##### Mover clase a otra asignatura")
+            if carpeta_clases.exists():
+                otras_materias = sorted([
+                    d.name for d in carpeta_clases.iterdir()
+                    if d.is_dir() and not d.name.startswith(".") and d.name != mat
+                ])
+            else:
+                otras_materias = []
+
+            opcion_nueva_m = "➕ Mover a nueva asignatura..."
+            opciones_destino = otras_materias + [opcion_nueva_m]
+
+            mat_destino_sel = st.selectbox(
+                "Selecciona la asignatura de destino:",
+                opciones_destino,
+                format_func=lambda x: x if x == opcion_nueva_m else x.replace("_", " "),
+                key="sb_mover_asignatura_sel",
+            )
+
+            if mat_destino_sel == opcion_nueva_m:
+                nueva_mat_nombre = st.text_input(
+                    "Nombre de la nueva asignatura:",
+                    placeholder="Ej: Programación Web",
+                    key="txt_nueva_mat_mover",
+                ).strip()
+                caracteres_prohibidos_mat = [c for c in r'/\:*?"<>|' if c in nueva_mat_nombre]
+                mat_destino_slug = normalizar_nombre(nueva_mat_nombre) if nueva_mat_nombre else ""
+            else:
+                caracteres_prohibidos_mat = []
+                mat_destino_slug = mat_destino_sel
+
+            if st.button("Mover clase a la asignatura seleccionada", use_container_width=True, key="btn_mover_clase_accion"):
+                if caracteres_prohibidos_mat:
+                    st.error(f"⚠️ El nombre contiene caracteres prohibidos: {' '.join(caracteres_prohibidos_mat)}")
+                elif not mat_destino_slug:
+                    st.error("⚠️ Debes seleccionar o especificar la asignatura de destino.")
+                elif mat_destino_slug == mat:
+                    st.warning("La clase ya pertenece a esa asignatura.")
+                else:
+                    dir_nueva_materia = carpeta_clases / mat_destino_slug
+                    destino_final = dir_nueva_materia / cla
+                    if not es_ruta_segura(destino_final, base=carpeta_clases):
+                        st.error("⚠️ La ruta de destino no es segura.")
+                    elif destino_final.exists():
+                        st.error(f"⚠️ Ya existe una clase con el nombre '{cla}' en la asignatura '{mat_destino_slug.replace('_', ' ')}'.")
+                    else:
+                        try:
+                            dir_nueva_materia.mkdir(parents=True, exist_ok=True)
+                            shutil.move(str(directorio_clase), str(destino_final))
+                            st.session_state["materia_seleccionada"] = mat_destino_slug
+                            st.session_state["clase_seleccionada"] = cla
+                            st.success(f"✅ Clase movida con éxito a '{mat_destino_slug.replace('_', ' ')}'.")
+                            time.sleep(0.5)
+                            st.rerun()
+                        except OSError as err:
+                            st.error(f"Error al mover la clase: {err}")
+
+        with tab_eliminar:
+            st.markdown("##### Eliminar clase permanentemente")
+            st.warning(
+                f"⚠️ Esta acción eliminará permanentemente la carpeta **{cla.replace('_', ' ')}** "
+                f"incluyendo todos los apuntes, audios y transcripciones generadas."
+            )
+            confirmacion_eliminar = st.checkbox(
+                "Confirmo que deseo eliminar definitivamente esta clase y sus archivos.",
+                key="chk_confirmar_eliminar_clase",
+            )
+            if st.button(
+                "🗑️ Eliminar esta clase",
+                type="primary",
+                disabled=not confirmacion_eliminar,
+                use_container_width=True,
+                key="btn_eliminar_clase_definitivo",
+            ):
+                try:
+                    shutil.rmtree(str(directorio_clase))
+                    st.session_state["clase_seleccionada"] = None
+                    st.success("✅ Clase eliminada.")
+                    time.sleep(0.5)
+                    st.rerun()
+                except OSError as err:
+                    st.error(f"Error al eliminar la clase: {err}")
+
     # Reprocesamiento granular
     tiene_transcripcion = (
         transcripcion_path.exists()
@@ -110,11 +244,11 @@ def renderizar_editor_apuntes(directorio_clase: Path) -> None:
 
         with col_re1:
             btn_solo_apuntes = st.button(
-                "🔄 Re-generar Apuntes (Solo LLM)",
+                "🔄 Re-generar Apuntes (Solo Síntesis)",
                 key="btn_solo_apuntes",
                 use_container_width=True,
                 disabled=not tiene_transcripcion,
-                help="Regenera los apuntes con Ollama usando la transcripción existente. Whisper se omite.",
+                help="Regenera los apuntes usando la transcripción existente. Se omite la re-transcripción.",
             )
             if not tiene_transcripcion:
                 st.caption("⚠️ Sin transcripción disponible — ejecuta primero el pipeline completo.")
@@ -144,7 +278,7 @@ def renderizar_editor_apuntes(directorio_clase: Path) -> None:
             ]
             ok = _ejecutar_subproceso_con_spinner(
                 cmd_solo,
-                spinner_msg="Re-sintetizando apuntes con Ollama y auditando... (Whisper omitido)",
+                spinner_msg="Re-sintetizando apuntes y auditando...",
                 exito_msg="✅ Apuntes regenerados correctamente.",
                 error_prefix="Error en la re-generación de apuntes",
             )
@@ -180,7 +314,7 @@ def renderizar_editor_apuntes(directorio_clase: Path) -> None:
 
     st.divider()
 
-    tab1, tab2, tab3 = st.tabs(["📝 Apuntes y Ejemplos", "🔍 Control de Alucinaciones", "📜 Transcripción Cruda"])
+    tab1, tab2, tab3 = st.tabs(["📝 Apuntes y Ejemplos", "🔍 Revisión y Auditoría", "📜 Transcripción Cruda"])
 
     with tab1:
         if apuntes_path.exists():
@@ -264,17 +398,17 @@ def renderizar_editor_apuntes(directorio_clase: Path) -> None:
             _mc1, _mc2, _mc3 = st.columns(3)
             _mc1.metric("Timestamps", _res.timestamps_detectados)
             _mc2.metric("Cobertura de términos", f"{_res.cobertura_terminos:.0%}")
-            _mc3.metric("Errores críticos", len(_res.errores))
+            _mc3.metric("Discrepancias técnicas", len(_res.errores))
 
-            # Errores críticos
+            # Discrepancias técnicas y advertencias
             if _res.errores:
-                st.markdown("##### 🔴 Errores críticos")
+                st.markdown("##### 🔴 Discrepancias técnicas")
                 for _err in _res.errores:
                     st.error(_err)
 
-            # Advertencias
+            # Advertencias de sintaxis
             if _res.advertencias:
-                st.markdown("##### 🟡 Advertencias")
+                st.markdown("##### 🟡 Advertencias de sintaxis")
                 for _adv in _res.advertencias:
                     st.warning(_adv)
 

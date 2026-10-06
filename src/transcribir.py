@@ -5,6 +5,8 @@ import platform
 from pathlib import Path
 from typing import Optional
 
+MODELO_WHISPER = "Whisper Large-v3 Turbo"
+
 # Importación robusta del gestor de checkpoints
 try:
     from src.checkpoint_manager import CheckpointManager, FASE_TRANSCRIBIENDO, FASE_SINTETIZANDO

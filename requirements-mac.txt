@@ -6,3 +6,4 @@ tqdm
 ollama
 pytest
 yt-dlp
+python-pptx>=1.0.0

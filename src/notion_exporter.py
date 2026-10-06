@@ -91,22 +91,50 @@ def crear_rich_text(texto: str) -> list:
     return rich_text if rich_text else [{"type": "text", "text": {"content": texto[:2000]}}]
 
 
+_RE_TITULO_INDICE = re.compile(
+    r"^\W*(?:[íi]ndice(?:\s+(?:general|de\s+contenidos?))?|tabla\s+de\s+contenidos?|contenidos|table\s+of\s+contents|toc)\W*$",
+    re.IGNORECASE,
+)
+
+
+def eliminar_indice_textual(markdown_texto: str) -> str:
+    """Elimina secciones '## Índice' / '## Tabla de contenidos' (y su contenido)
+    hasta el siguiente encabezado del mismo nivel o superior. Notion ya genera
+    un índice nativo interactivo, por lo que el textual sería redundante."""
+    resultado = []
+    nivel_omitido = None
+    for linea in markdown_texto.split("\n"):
+        m = re.match(r"^(#{1,6})\s+(.*)$", linea.strip())
+        if m:
+            nivel = len(m.group(1))
+            if nivel_omitido is not None and nivel <= nivel_omitido:
+                nivel_omitido = None
+            if nivel_omitido is None and nivel >= 2 and _RE_TITULO_INDICE.match(m.group(2).replace("*", "").strip()):
+                nivel_omitido = nivel
+                continue
+        if nivel_omitido is None:
+            resultado.append(linea)
+    return "\n".join(resultado)
+
+
 def markdown_a_bloques_notion(markdown_texto: str, materia: str = "", clase: str = "") -> list:
     bloques = []
+    markdown_texto = eliminar_indice_textual(markdown_texto)
 
-    # 1. Cabecera limpia y estilizada
+    # 1. Cabecera limpia y estilizada con formato estrictamente académico
     materia_fmt = materia.replace("_", " ")
     clase_fmt = clase.replace("_", " ")
+    fecha_actual = time.strftime("%d/%m/%Y")
 
     bloques.append({
         "object": "block",
         "type": "callout",
         "callout": {
             "rich_text": crear_rich_text(
-                f"**{materia_fmt}** — {clase_fmt}\n"
-                f"Sintetizado localmente con Qwen 2.5 7B (Multiplataforma)"
+                f"**{clase_fmt}**\n"
+                f"Registro de clase • {materia_fmt} • {fecha_actual}"
             ),
-            "icon": {"type": "emoji", "emoji": "💻"},
+            "icon": {"type": "emoji", "emoji": "📖"},
             "color": "gray_background"
         }
     })
@@ -276,6 +304,16 @@ def markdown_a_bloques_notion(markdown_texto: str, materia: str = "", clase: str
             "paragraph": {"rich_text": crear_rich_text(linea)}
         })
         i += 1
+
+    # 4. Pie con formato estrictamente académico
+    bloques.append({"object": "block", "type": "divider", "divider": {}})
+    bloques.append({
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+            "rich_text": crear_rich_text(f"*Registro de clase • {materia_fmt} • {fecha_actual}*")
+        }
+    })
 
     return bloques
 

@@ -21,6 +21,7 @@ from views.sidebar import renderizar_sidebar
 from views.vista_individual import renderizar_vista_individual
 from views.vista_lotes import renderizar_vista_lotes
 from views.editor_apuntes import renderizar_editor_apuntes
+from views.vista_practica import renderizar_vista_practica
 
 ROOT_DIR = Path(__file__).resolve().parent
 
@@ -64,11 +65,14 @@ orquestador = PipelineOrchestrator()
 # 6. Despacho dinámico según la navegación
 materia_sel = estado_nav.get("materia")
 clase_sel = estado_nav.get("clase")
+vista = estado_nav.get("vista") or st.session_state.get("vista_actual")
 
 if materia_sel and clase_sel:
     directorio_clase = ROOT_DIR / "clases" / materia_sel / clase_sel
     renderizar_editor_apuntes(directorio_clase)
-elif estado_nav.get("vista") == "lotes":
+elif vista == "practica":
+    renderizar_vista_practica(ROOT_DIR)
+elif vista == "lotes":
     renderizar_vista_lotes(ROOT_DIR, cola_manager=cola_manager, orquestador=orquestador)
 else:
     renderizar_vista_individual(ROOT_DIR, orquestador=orquestador)

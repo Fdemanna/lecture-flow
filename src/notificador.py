@@ -17,6 +17,7 @@ Uso básico
     notificar_error("Transcripción", "CUDA out of memory")
 """
 
+import html
 import json
 import os
 from pathlib import Path
@@ -131,14 +132,15 @@ def notificar_clase_completada(
         URL de la página exportada a Notion, opcional.
     """
     nombre_legible = nombre_clase.replace("_", " ")
+    nombre_escapado = html.escape(nombre_legible)
     lineas = [
         "✅ <b>LectureFlow — Clase completada</b>",
         "",
-        f"📖 <b>Clase:</b> {nombre_legible}",
-        f"⏱ <b>Duración:</b> {duracion}",
+        f"📖 <b>Clase:</b> {nombre_escapado}",
+        f"⏱ <b>Duración:</b> {html.escape(str(duracion))}",
     ]
-    if url_notion:
-        lineas.append(f'🔗 <a href="{url_notion}">Abrir en Notion</a>')
+    if url_notion and url_notion.strip():
+        lineas.append(f'🔗 <a href="{html.escape(url_notion.strip(), quote=True)}">Abrir en Notion</a>')
 
     return enviar_mensaje("\n".join(lineas))
 

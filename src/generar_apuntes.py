@@ -5,15 +5,19 @@ Incluye:
 - Detección determinista de truncamiento usando 'done_reason: length'.
 - Acceso seguro a la respuesta de Ollama con control de fallos (I-1).
 - Backup preventivo automático antes de sobrescribir apuntes.md (I-7).
-- Auditoría automática de fidelidad y alucinaciones (Critic-Loop).
+- Auditoría automática de fidelidad y discrepancias técnicas (Critic-Loop).
 """
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
+import json
 import os
+from pathlib import Path
 import re
 import shutil
 import sys
+from typing import Optional, Union, Dict, Any, List
 import ollama
 
 if sys.platform == "win32":
@@ -24,6 +28,50 @@ if sys.platform == "win32":
         pass
 
 MODEL = "qwen2.5:7b"
+MODELO_LLM = MODEL
+
+# Esquema JSON estricto para extracción de preguntas de evaluación activa
+SCHEMA_PREGUNTAS: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "preguntas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tipo": {
+                        "type": "string",
+                        "description": "Tipo de pregunta: conceptual, codigo o analisis",
+                    },
+                    "pregunta": {
+                        "type": "string",
+                        "description": "Enunciado riguroso de la pregunta de evaluación",
+                    },
+                    "codigo": {
+                        "type": "string",
+                        "description": "Fragmento de código relevante o cadena vacía si no aplica",
+                    },
+                    "opciones": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Exactamente 4 opciones de respuesta posibles",
+                    },
+                    "correcta": {
+                        "type": "integer",
+                        "description": "Índice (0 a 3) de la opción correcta en la lista 'opciones'",
+                    },
+                    "explicacion": {
+                        "type": "string",
+                        "description": "Justificación pedagógica detallada de la respuesta correcta",
+                    },
+                },
+                "required": ["tipo", "pregunta", "codigo", "opciones", "correcta", "explicacion"],
+            },
+        }
+    },
+    "required": ["preguntas"],
+}
+
 
 # [M-2] Constantes para estimación del presupuesto de contexto en unificación
 CHARS_POR_TOKEN_APROX = 3.5  # Estimación conservadora para texto en español
@@ -42,7 +90,7 @@ OPTIONS_UNIFICACION = {
 }
 
 SYSTEM_PROMPT = (
-    "Eres un asistente pedagógico técnico especializado en el ciclo formativo de "
+    "Eres un especialista pedagógico técnico especializado en el ciclo formativo de "
     "Desarrollo de Aplicaciones Web (DAW). Tu tarea es transformar transcripciones de "
     "clases técnicas en material de estudio estructurado, riguroso y en Markdown, "
     "siguiendo con precisión milimétrica las directivas de fidelidad a la fuente, "
@@ -74,6 +122,7 @@ DIRECTIVAS ESTRICTAS DE PRIVACIDAD Y ENFOQUE PEDAGÓGICO:
 6. **UN EJEMPLO = UN BLOQUE**: Cada ejemplo o consejo debe tener su propio bloque '📌' o '⚠️' individual con su timestamp específico y ajustado al momento exacto en que ocurre. No agrupes ideas distintas bajo rangos de tiempo inflados.
 7. **Sin relleno duplicado**: Prohibido repetir la misma idea como alternativas distintas en listas o pasos. Cada punto debe aportar un dato nuevo.
 8. **Glosario con definiciones reales**: Todo término técnico listado debe incluir una definición concisa basada en lo explicado, nunca el término suelto.
+9. **Sin índice textual**: NO incluyas un apartado de 'Índice' o 'Tabla de contenidos' en el texto Markdown; la plataforma de lectura lo genera automáticamente de forma interactiva.
 """
 
 
@@ -133,7 +182,6 @@ Transforma la transcripción de esta clase técnica en un documento de estudio e
 
 ESTRUCTURA OBLIGATORIA DEL DOCUMENTO:
 # 📖 Apuntes: [Título deducido de la clase]
-## 📑 Índice de Contenidos
 ## 🧩 Desarrollo de Bloques Temáticos (con subtítulos ###, tablas y citas puntuales)
 ## 🔑 Glosario de Términos Clave (con definiciones reales de una frase)
 ## 🧠 Preguntas de Repaso (3 a 5 preguntas de evaluación basadas solo en la clase, con respuestas explicadas al final)
@@ -163,7 +211,7 @@ A continuación tienes los apuntes generados a partir de fragmentos consecutivos
 Únelos en un único documento definitivo y coherente.
 
 REGLAS DE UNIFICACIÓN:
-1. Crea un Título representativo y un Índice general numerado.
+1. Crea un Título representativo. NO incluyas un apartado de 'Índice' o 'Tabla de contenidos'; la plataforma de lectura lo genera automáticamente de forma interactiva.
 2. Une el desarrollo temático eliminando redundancias, pero MANTÉN INTACTOS todos los bloques '> 📌 **Ejemplo del profesor**' y '> ⚠️ **Consejos del profesor**' con sus timestamps exactos. Prohibido resumirlos o eliminarlos.
 3. Respeta la regla de NO inventar código textual si la herramienta era visual (Raptor, diagramas).
 4. Consolida un único '## 🔑 Glosario Unificado de Términos Clave' asegurando que cada término tenga su definición clara.
@@ -269,7 +317,7 @@ Básate Única y exclusivamente en el contenido del documento. No inventes requi
 (Mínimo 3 conceptos donde los alumnos suelen fallar según lo explicado en la clase.)
 
 ### 📝 Chuleta técnica rápida
-(Resumen sintético en 5-10 viñetas de los conceptos o procedimientos esenciales.)
+(Esquema y conceptos clave en 5-10 viñetas de los conceptos o procedimientos esenciales.)
 
 ### ✅ Checklist de autoevaluación
 (Casillas `- [ ]` con los conocimientos indispensables para considerar la sesión dominada.)
@@ -296,12 +344,17 @@ DOCUMENTO DE APUNTES:
 # ---------------------------------------------------------------------------
 # 3. Llamada al modelo con acceso seguro e inspección determinista (I-1)
 # ---------------------------------------------------------------------------
-def llamar_modelo_seguro(prompt_usuario: str, options: dict) -> str:
-    print("  [LLM] Procesando con Qwen 2.5 en local...", end="", flush=True)
+def llamar_modelo_seguro(
+    prompt_usuario: str,
+    options: dict,
+    keep_alive: Union[str, int] = "5m",
+) -> str:
+    print(f"  [Síntesis] Procesando con {MODEL} en local...", end="", flush=True)
     
     respuesta = ollama.chat(
         model=MODEL,
         options=options,
+        keep_alive=keep_alive,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt_usuario},
@@ -361,10 +414,10 @@ def validar_timestamps(contenido: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 5. Auditoría de alucinaciones (Critic-Loop)
+# 5. Auditoría de fidelidad y discrepancias técnicas (Critic-Loop)
 # ---------------------------------------------------------------------------
 def auditar_apuntes(texto_transcripcion: str, apuntes_generados: str, ruta_auditoria: str = "auditoria.md"):
-    print("\n--- Ejecutando auditoría de alucinaciones y fidelidad técnica ---")
+    print("\n--- Ejecutando auditoría de discrepancias y fidelidad técnica ---")
     
     prompt_auditoria = f"""
 Aquí tienes la transcripción ORIGINAL de la clase y unos apuntes generados a partir de ella.
@@ -372,10 +425,10 @@ Compara ambos minuciosamente y señala CUALQUIER afirmación, sintaxis de códig
 símbolo o dato concreto en los apuntes que NO aparezca de forma explícita o equivalente en la transcripción.
 
 REGLAS DE REVISIÓN:
-- Marca cada problema con "🚩 POSIBLE ALUCINACIÓN: [línea o sección]" seguido de una justificación breve.
+- Marca cada problema con "🚩 DISCREPANCIA TÉCNICA: [línea o sección]" seguido de una justificación breve.
 - Presta especial atención a si se inventó código escrito cuando el profesor usaba herramientas visuales (como diagramas de flujo o Raptor).
 - Revisa si hay timestamps con rangos de tiempo inventados.
-- Si no encuentras inconsistencias o datos inventados, responde únicamente: "✅ Sin alucinaciones detectadas. El documento es 100% fiel a la transcripción."
+- Si no encuentras inconsistencias o datos inventados, responde únicamente: "✅ Sin discrepancias detectadas. El documento es 100% fiel a la transcripción."
 - No intentes reescribir ni corregir el documento; limítate a emitir el informe de auditoría.
 
 ---
@@ -398,7 +451,7 @@ APUNTES GENERADOS:
         with open(ruta_auditoria, "w", encoding="utf-8") as f:
             f.write(reporte)
         
-        if "🚩 POSIBLE ALUCINACIÓN" in reporte:
+        if "🚩 DISCREPANCIA TÉCNICA" in reporte or "🚩 POSIBLE ALUCINACIÓN" in reporte:
             print(f"[AVISO] Se detectaron discrepancias. Revisa el informe en: {ruta_auditoria}")
         else:
             print(f"[OK] Auditoría limpia. Informe guardado en: {ruta_auditoria}")
@@ -435,6 +488,133 @@ def descargar_modelo_ollama(modelo: str = MODEL) -> bool:
             pass
         print(f" no se pudo desalojar automáticamente: {exc}", flush=True)
         return False
+
+
+# ---------------------------------------------------------------------------
+# 5b. Generación desatendida de preguntas de evaluación activa (Quiz)
+# ---------------------------------------------------------------------------
+def generar_preguntas_clase(texto_apuntes: str, materia: str, clase: str) -> list[dict]:
+    """Genera un banco de 5 preguntas tipo test a partir de los apuntes Markdown.
+
+    Invoca a Ollama usando el schema JSON estricto SCHEMA_PREGUNTAS y descarga
+    el modelo de la VRAM al terminar la llamada (keep_alive=0).
+    """
+    if not texto_apuntes or not texto_apuntes.strip():
+        print("[QUIZ] Advertencia: texto de apuntes vacío, no se pueden generar preguntas.")
+        return []
+
+    print(f"\n--- [QUIZ] Generando evaluación activa para '{clase}' ({materia}) ---")
+    print(f"  [Síntesis] Extrayendo 5 preguntas estructuradas con {MODELO_LLM}...", end="", flush=True)
+
+    prompt_sistema = (
+        "Eres un profesor técnico y pedagógico especializado en ciclos formativos de Desarrollo "
+        "de Aplicaciones Web (DAW). Diseña preguntas formativas rigurosas y desafiantes basadas "
+        "estrictamente en los apuntes de la clase proporcionados.\n\n"
+        "DIRECTIVAS ESTRICTAS:\n"
+        "- Genera exactamente 5 preguntas tipo test de opción múltiple.\n"
+        "- Cada pregunta debe tener exactamente 4 opciones en el array 'opciones'.\n"
+        "- El campo 'correcta' debe ser el índice entero (0, 1, 2 o 3) de la respuesta correcta.\n"
+        "- El campo 'tipo' debe ser una etiqueta como 'conceptual', 'codigo' o 'analisis'.\n"
+        "- Si la pregunta evalúa código, incluye el bloque en 'codigo'. Si no aplica, usa cadena vacía \"\".\n"
+        "- 'explicacion' debe detallar pedagógicamente por qué la opción correcta es la adecuada y alertar sobre errores comunes.\n"
+        "- PROHIBIDO inventar conceptos, métodos o sintaxis no contenidos en los apuntes."
+    )
+
+    prompt_usuario = (
+        f"A partir de los siguientes apuntes de la materia '{materia}' y clase '{clase}', "
+        f"genera un banco de exactamente 5 preguntas de evaluación activa en formato JSON conforme al esquema:\n\n"
+        f"---\nAPUNTES:\n{texto_apuntes[:24000]}"
+    )
+
+    options_quiz = {
+        "num_ctx": 8192,
+        "temperature": 0.3,
+    }
+
+    try:
+        respuesta = ollama.chat(
+            model=MODELO_LLM,
+            format=SCHEMA_PREGUNTAS,
+            options=options_quiz,
+            keep_alive=0,  # IMPORTANTE: Descargar modelo tras esta última llamada
+            messages=[
+                {"role": "system", "content": prompt_sistema},
+                {"role": "user", "content": prompt_usuario},
+            ],
+        )
+        print(" completado.")
+    except Exception as exc:
+        print(f" fallo en llamada al modelo: {exc}")
+        descargar_modelo_ollama(MODELO_LLM)
+        raise
+
+    mensaje = respuesta.get("message") if isinstance(respuesta, dict) else getattr(respuesta, "message", None)
+    if mensaje is None:
+        descargar_modelo_ollama(MODELO_LLM)
+        raise RuntimeError("La respuesta de Ollama no contiene el campo 'message'.")
+
+    contenido = mensaje.get("content") if isinstance(mensaje, dict) else getattr(mensaje, "content", "")
+    if not contenido or not contenido.strip():
+        descargar_modelo_ollama(MODELO_LLM)
+        raise RuntimeError("El modelo devolvió un contenido vacío al generar preguntas.")
+
+    try:
+        datos = json.loads(contenido)
+    except json.JSONDecodeError as err:
+        descargar_modelo_ollama(MODELO_LLM)
+        raise ValueError(f"Fallo al decodificar el JSON de preguntas devuelto por Ollama: {err}")
+
+    preguntas_raw = datos.get("preguntas", []) if isinstance(datos, dict) else []
+    if not preguntas_raw and isinstance(datos, list):
+        preguntas_raw = datos
+
+    fecha_creacion = datetime.now().isoformat()
+    materia_str = materia.strip()
+    clase_str = clase.strip()
+
+    preguntas_limpias: list[dict] = []
+    for idx, p in enumerate(preguntas_raw):
+        if not isinstance(p, dict):
+            continue
+
+        texto_p = str(p.get("pregunta", "")).strip().lower()
+        id_estirpe = hashlib.sha1(
+            f"{materia_str.lower()}/{clase_str.lower()}/{texto_p}".encode("utf-8")
+        ).hexdigest()[:10]
+
+        opciones_raw = p.get("opciones", [])
+        if not isinstance(opciones_raw, list):
+            opciones_raw = [str(opciones_raw)]
+        opciones = [str(opt).strip() for opt in opciones_raw]
+
+        while len(opciones) < 4:
+            opciones.append("N/A")
+        opciones = opciones[:4]
+
+        try:
+            correcta_val = int(p.get("correcta", 0))
+            if correcta_val < 0 or correcta_val >= len(opciones):
+                correcta_val = 0
+        except (ValueError, TypeError):
+            correcta_val = 0
+
+        pregunta_item = {
+            "id": id_estirpe,
+            "materia": materia_str,
+            "clase": clase_str,
+            "fecha_creacion": fecha_creacion,
+            "tipo": str(p.get("tipo", "conceptual")).strip(),
+            "pregunta": str(p.get("pregunta", "")).strip(),
+            "codigo": str(p.get("codigo", "") or "").strip(),
+            "opciones": opciones,
+            "correcta": correcta_val,
+            "explicacion": str(p.get("explicacion", "")).strip(),
+        }
+        preguntas_limpias.append(pregunta_item)
+
+    preguntas_finales = preguntas_limpias[:5]
+    print(f"  [QUIZ] {len(preguntas_finales)} preguntas generadas y validadas con éxito.")
+    return preguntas_finales
 
 
 # ---------------------------------------------------------------------------
@@ -506,6 +686,23 @@ def generar_material_estudio(
             shutil.copy2(ruta_salida, ruta_bak)
             print(f"📦 Backup preventivo creado: '{ruta_bak}'")
 
+        # Cabecera y pie con formato estrictamente académico
+        p_salida = Path(ruta_salida).resolve()
+        materia_acad = "DAW"
+        if len(p_salida.parts) >= 3 and p_salida.parts[-3] == "clases":
+            materia_acad = p_salida.parts[-2].replace("_", " ").title()
+        elif len(p_salida.parents) >= 2:
+            materia_acad = p_salida.parent.parent.name.replace("_", " ").title()
+
+        fecha_acad = datetime.now().strftime("%d/%m/%Y")
+        cabecera_acad = f"> 🏛️ **Registro de clase** • {materia_acad} • {fecha_acad}\n\n"
+        pie_acad = f"\n\n---\n\n*Registro de clase • {materia_acad} • {fecha_acad}*\n"
+
+        if not contenido_final.startswith("> 🏛️ **Registro de clase**"):
+            contenido_final = cabecera_acad + contenido_final.lstrip()
+        if not contenido_final.strip().endswith(f"Registro de clase • {materia_acad} • {fecha_acad}*"):
+            contenido_final = contenido_final.rstrip() + pie_acad
+
         # Guardado del resultado final
         with open(ruta_salida, "w", encoding="utf-8") as f:
             f.write(contenido_final)
@@ -530,9 +727,11 @@ def generar_material_estudio(
 
         print(f"\n❌ ERROR CRÍTICO: {e}")
         print(f"📁 El material parcial generado se ha preservado en: {ruta_incompleta}")
-        sys.exit(1)
-    finally:
         descargar_modelo_ollama(MODEL)
+        sys.exit(1)
+    except Exception:
+        descargar_modelo_ollama(MODEL)
+        raise
 
 
 if __name__ == "__main__":

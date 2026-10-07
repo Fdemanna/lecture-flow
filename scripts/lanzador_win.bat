@@ -13,8 +13,8 @@ if "%ERRORLEVEL%"=="1" (
 
 call ".\venv_win\Scripts\activate.bat"
 
-:: Lanzar el navegador manualmente en paralelo para asegurar que abra la pestaña
-start "" http://localhost:8501
+:: Lanzar el navegador apuntando a la SPA unificada en FastAPI
+start "" http://127.0.0.1:8000
 
-:: Iniciar Streamlit en el puerto base
-python -m streamlit run app.py --server.port 8501 --server.headless true
+:: Iniciar FastAPI con Uvicorn en el puerto 8000
+python -m uvicorn src.api.main:app --port 8000 --host 127.0.0.1

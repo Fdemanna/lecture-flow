@@ -44,7 +44,7 @@ from src.notificador import (
 )
 from src.cola_manager import ColaManager
 from src.downloader import descargar_audio, es_url_remota
-from src.extractores_documentos import extraer_texto_pptx
+from src.extractores_documentos import extraer_texto_pptx, extraer_texto_pdf
 
 logger = logging.getLogger("orchestrator")
 
@@ -205,8 +205,9 @@ class PipelineOrchestrator:
         cp = CheckpointManager(str(directorio_destino), vid_path_str)
 
         try:
-            # Detección de presentación PowerPoint
+            # Detección de presentación PowerPoint o documento PDF
             es_presentacion_pptx = bool(vid_path_str and vid_path_str.lower().endswith(".pptx"))
+            es_documento_pdf = bool(vid_path_str and vid_path_str.lower().endswith(".pdf"))
 
             # ---------------------------------------------------------------
             # FASE 1: Transcripción / Extracción de Contenido
@@ -249,6 +250,39 @@ class PipelineOrchestrator:
                 
                 self._emitir_linea(f"[PPTX] Extracción completada ({len(texto_extraido):,} caracteres). Transcripción de audio omitida.\n")
                 self._emitir_progreso("transcripcion", 50, "Extracción de PowerPoint completada con éxito.")
+            elif es_documento_pdf:
+                self._emitir_progreso("transcripcion", 15, "Paso 1/4: Extrayendo contenido de documento PDF (.pdf)...")
+                self._emitir_linea(f"[PDF] Ingesta directa de documento PDF: {Path(vid_path_str).name}\n")
+                
+                texto_extraido = extraer_texto_pdf(Path(vid_path_str))
+                if not texto_extraido.strip():
+                    raise ValueError("El archivo PDF no contiene texto legible (posible documento escaneado sin OCR)")
+                
+                # Guardar en transcripcion.txt para que la fase de síntesis lo procese homogéneamente
+                with open(ruta_transcripcion, "w", encoding="utf-8") as f_txt:
+                    f_txt.write(texto_extraido)
+                
+                # Guardar también en contenido_base.txt y transcripcion.json para interoperabilidad
+                ruta_contenido_base = directorio_destino / "contenido_base.txt"
+                with open(ruta_contenido_base, "w", encoding="utf-8") as f_cb:
+                    f_cb.write(texto_extraido)
+                
+                ruta_trans_json = directorio_destino / "transcripcion.json"
+                with open(ruta_trans_json, "w", encoding="utf-8") as f_tj:
+                    json.dump(
+                        {
+                            "fuente": Path(vid_path_str).name,
+                            "tipo": "pdf",
+                            "tamano_caracteres": len(texto_extraido),
+                            "contenido": texto_extraido,
+                        },
+                        f_tj,
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                
+                self._emitir_linea(f"[PDF] Extracción completada ({len(texto_extraido):,} caracteres). Transcripción de audio omitida.\n")
+                self._emitir_progreso("transcripcion", 50, "Extracción de PDF completada con éxito.")
             elif transcripcion_existe and not forzar_transcripcion and not modo_reanudacion and not cp.existe_sesion_previa():
                 self._emitir_progreso("transcripcion", 50, "Paso 1/2 omitido: Transcripción previa detectada.")
                 self._emitir_linea(f"[INFO] Se reutiliza 'transcripcion.txt' ({ruta_transcripcion.name})\n")

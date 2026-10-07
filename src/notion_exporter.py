@@ -490,3 +490,7 @@ def exportar_a_notion(titulo_clase: str, materia: str, markdown_texto: str) -> s
 
     logger.info("[NOTION] Exportación exitosa a Notion: %s", url_pagina)
     return url_pagina
+
+
+# Alias para compatibilidad con servicios desacoplados
+exportar_apuntes_a_notion = exportar_a_notion

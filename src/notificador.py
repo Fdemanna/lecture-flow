@@ -47,6 +47,11 @@ def _credenciales_ok() -> bool:
     return bool(_token()) and bool(_chat_id())
 
 
+def telegram_configurado() -> bool:
+    """Comprueba si el bot y chat id de Telegram están configurados."""
+    return _credenciales_ok()
+
+
 # ---------------------------------------------------------------------------
 # Función base de envío
 # ---------------------------------------------------------------------------

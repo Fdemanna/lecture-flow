@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --bg-base: #0f131d;
+  --surface-card: #171b26;
+  --surface-hover: #1c2233;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-accent: rgba(128, 131, 255, 0.25);
+  --accent-primary: #8083ff;
+  --accent-emerald: #4edea3;
+  --accent-amber: #fb923c;
+  --text-primary: #f8fafc;
+  --text-muted: #94a3b8;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Scrollbar estilizada Obsidian Flow */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f131d;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 131, 255, 0.4);
+}

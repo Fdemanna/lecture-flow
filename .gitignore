@@ -1,5 +1,5 @@
 # Byte-compiled / optimizados / caches
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.pyo
@@ -15,6 +15,16 @@ __pycache__/
 venv/
 venv_*/
 
+# Frontend Vite / React
+frontend/node_modules/
+frontend/dist/
+
+# Archivos de estado y locks locales
+data/
+data/.procesando.lock
+data/*.tmp
+cola_trabajo.json
+
 # Backups del proyecto
 backups/
 
@@ -27,6 +37,7 @@ backups/
 *.m4a
 *.wav
 *.bak-*
+*.pptx
 
 # Directorio de clases: ignorar archivos generados manteniendo los .gitkeep
 clases/*
@@ -39,7 +50,3 @@ Thumbs.db
 # Caché de pytest
 .pytest_cache/
 
-# Datos locales de estudio, cola y presentaciones
-data/
-cola_trabajo.json
-*.pptx

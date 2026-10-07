@@ -113,3 +113,81 @@ def extraer_texto_pptx(ruta_archivo: Union[Path, str]) -> str:
         len(contenido_final),
     )
     return contenido_final
+
+
+def extraer_texto_pdf(ruta_archivo: Union[Path, str]) -> str:
+    """Extrae el contenido textual estructurado de un documento PDF.
+
+    Itera sobre las páginas del documento, extrayendo el texto y formateándolo
+    como '### Página N' con marcas de referencia para el generador de apuntes.
+
+    Args:
+        ruta_archivo: Ruta al archivo .pdf
+
+    Returns:
+        Cadena con el texto estructurado en Markdown, o cadena vacía si no contiene
+        texto legible (documento escaneado sin capa OCR).
+    """
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise ImportError(
+            "La librería 'pypdf' no está instalada. "
+            "Ejecuta: venv/bin/pip install pypdf"
+        ) from exc
+
+    ruta = Path(ruta_archivo).resolve()
+    if not ruta.exists():
+        raise FileNotFoundError(f"No se encuentra el archivo PDF en: {ruta}")
+
+    logger.info("Iniciando extracción de PDF: %s", ruta.name)
+    reader = PdfReader(str(ruta))
+
+    if reader.is_encrypted:
+        try:
+            reader.decrypt("")
+        except Exception:
+            raise ValueError(f"El archivo PDF '{ruta.name}' está protegido con contraseña.")
+
+    total_paginas = len(reader.pages)
+    bloques_paginas: List[str] = []
+    texto_total_acumulado = []
+
+    for idx, page in enumerate(reader.pages, start=1):
+        minutos = (idx - 1) * 2
+        timestamp_estimado = f"[{minutos // 60:02d}:{minutos % 60:02d}:00]"
+
+        lineas_pagina: List[str] = [
+            f"### Página {idx}",
+            f"*Marca temporal de referencia: {timestamp_estimado}*",
+        ]
+
+        texto_pagina = ""
+        try:
+            texto_pagina = (page.extract_text() or "").strip()
+        except Exception as e:
+            logger.warning("Error extrayendo texto de la página %d en %s: %s", idx, ruta.name, e)
+
+        if texto_pagina:
+            texto_total_acumulado.append(texto_pagina)
+            # Limpiar líneas vacías excesivas
+            lineas_limpias = [l.strip() for l in texto_pagina.splitlines() if l.strip()]
+            lineas_pagina.append("\n".join(lineas_limpias))
+        else:
+            lineas_pagina.append("(Página sin texto seleccionable o contenido puramente gráfico)")
+
+        bloques_paginas.append("\n".join(lineas_pagina))
+
+    # Si todo el documento no contiene ningún texto extraíble
+    if not "".join(texto_total_acumulado).strip():
+        logger.warning("El PDF '%s' no contiene texto legible (posible documento escaneado).", ruta.name)
+        return ""
+
+    contenido_final = "\n\n---\n\n".join(bloques_paginas)
+    logger.info(
+        "Extracción de PDF completada: %d páginas procesadas (%d caracteres de texto).",
+        total_paginas,
+        len(contenido_final),
+    )
+    return contenido_final
+

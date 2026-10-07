@@ -84,13 +84,12 @@ def renderizar_vista_practica(root_dir: Path) -> None:
         porcentaje = round((aciertos / total_p) * 100) if total_p > 0 else 0
         xp_ganada = aciertos * 10
 
-        st.markdown(
-            f"""
+        texto_racha = "1 día" if racha_actual == 1 else f"{racha_actual} días"
+        html_resumen = f"""
             <div style="background: #171b26; border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 36px; text-align: center; margin-top: 10px;">
                 <div style="font-size: 3.5rem; margin-bottom: 12px;">🏆</div>
                 <h2 style="color: #f8fafc; font-family: 'Geist', sans-serif; font-size: 1.6rem; margin-bottom: 6px;">¡Sesión de Práctica Completada!</h2>
                 <p style="color: #94a3b8; font-size: 0.92rem; margin-bottom: 24px;">Has repasado tus conocimientos con repetición espaciada SM-2.</p>
-                
                 <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin-bottom: 28px;">
                     <div style="background: #1c1f2a; border: 1px solid rgba(128,131,255,0.25); border-radius: 12px; padding: 14px 20px; min-width: 140px;">
                         <div style="font-size: 0.78rem; color: #94a3b8; font-weight: 500;">Puntuación</div>
@@ -102,13 +101,14 @@ def renderizar_vista_practica(root_dir: Path) -> None:
                     </div>
                     <div style="background: #1c1f2a; border: 1px solid rgba(251,146,60,0.25); border-radius: 12px; padding: 14px 20px; min-width: 140px;">
                         <div style="font-size: 0.78rem; color: #94a3b8; font-weight: 500;">Racha Diaria</div>
-                        <div style="font-size: 1.4rem; font-weight: 700; color: #fb923c; margin-top: 2px;">🔥 {"1 día" if racha_actual == 1 else f"{racha_actual} días"}</div>
+                        <div style="font-size: 1.4rem; font-weight: 700; color: #fb923c; margin-top: 2px;">🔥 {texto_racha}</div>
                     </div>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """
+        # Sin sangría ni líneas vacías: evita que Markdown lo interprete como bloque de código.
+        html_resumen = "".join(l.strip() for l in html_resumen.splitlines() if l.strip())
+        st.markdown(html_resumen, unsafe_allow_html=True)
 
         col_b1, col_b2 = st.columns(2)
         with col_b1:

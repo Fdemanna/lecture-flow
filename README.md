@@ -1,17 +1,65 @@
-# LectureFlow
+# LectureFlow — AI Study Suite
 
-Pipeline local de estudio sin terminal: transcribe grabaciones de clase, genera apuntes estructurados con un LLM local y los exporta a Notion. Todo el procesamiento —audio, transcripción e inferencia— se ejecuta en el equipo del usuario con Whisper `large-v3-turbo` y Ollama/Qwen 2.5 7B. Ningún dato de audio o texto sale a servidores externos.
+> **Suite académica local-first para la ingesta multimodal de clases, síntesis pedagógica estructurada con LLMs locales y repaso espaciado activo (SM-2).**
+
+LectureFlow procesa grabaciones de audio/vídeo, enlaces web, presentaciones PowerPoint (`.pptx`) y documentos de temario (`.pdf`), transformándolos en apuntes estructurados en Markdown, fichas exportables a Notion, alertas a Telegram y bancos de evaluación interactivos con repetición espaciada.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC.svg)](https://tailwindcss.com)
+[![Ollama](https://img.shields.io/badge/Ollama-Qwen_2.5_7B-black.svg)](https://ollama.com)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+---
+
+## 🏗️ Arquitectura del Sistema
+
+El sistema utiliza una arquitectura desacoplada basada en el principio **local-first** y la **fuente de verdad en el sistema de archivos**:
+
+```text
+                  ┌─────────────────────────────┐
+                  │    React 19 + TypeScript    │  (Tailwind CSS v4, Obsidian Flow)
+                  │       (localhost:8000)      │
+                  └──────────────┬──────────────┘
+                                 │ HTTP REST / SSE (EventStream)
+                                 ▼
+                  ┌─────────────────────────────┐
+                  │           FastAPI           │  (Uvicorn ASGI)
+                  │   API REST + Static Server  │
+                  └──────────────┬──────────────┘
+                                 │
+                  ┌──────────────┴──────────────┐
+                  ▼                             ▼
+       ┌─────────────────────┐       ┌─────────────────────┐
+       │   Services Layer    │       │     Job Manager     │
+       │  (Class, Study,     │       │  (Procesos async,   │
+       │   Export Services)  │       │   Lockfile control) │
+       └──────────┬──────────┘       └──────────┬──────────┘
+                  │                             │
+                  ▼                             ▼
+       ┌───────────────────────────────────────────────────┐
+       │                 LectureFlow Core                  │
+       │  • PipelineOrchestrator  • Whisper (Subproceso)  │
+       │  • PyMuPDF / pptx        • Ollama (Qwen 2.5 7B)   │
+       │  • StudyEngine (SM-2)    • Notion & Telegram APIs │
+       └──────────────────────────┬────────────────────────┘
+                                  │
+                                  ▼
+                     ┌─────────────────────────┐
+                     │   Filesystem Storage    │
+                     │  clases/ & data/*.json  │
+                     └─────────────────────────┘
+```
 
 ---
 
 ## Índice
 
 - [Contexto del proyecto](#contexto-del-proyecto)
-- [Arquitectura modular](#arquitectura-modular)
+- [Características principales](#características-principales)
+- [Arquitectura del Sistema](#️-arquitectura-del-sistema)
 - [Diagrama de flujo de componentes](#diagrama-de-flujo-de-componentes)
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Gestión de hardware y estabilidad](#gestión-de-hardware-y-estabilidad)
@@ -33,39 +81,37 @@ LectureFlow se desarrolló durante el ciclo formativo de Grado Superior de **Des
 La necesidad concreta era disponer de un sistema que:
 
 - Grabara la clase y generara documentación técnica estructurada sin intervención manual.
+- Admitiera tanto clases orales grabadas como diapositivas (`.pptx`) y temarios oficiales (`.pdf`).
 - Funcionara sin suscripciones ni APIs de pago externas.
 - Ejecutara toda la inferencia localmente, aprovechando la GPU disponible (Metal en Apple Silicon, CUDA en Windows).
-- Pudiera extraer audio de plataformas educativas con autenticación (Blackboard, Panopto, Moodle) sin descargar el archivo completo de vídeo.
+- Extrajera audio de plataformas educativas con autenticación (Blackboard, Panopto, Moodle) sin descargar el archivo completo de vídeo.
+- Facilitara el repaso sistemático a largo plazo mediante técnicas pedagógicas de recuerdo activo (*Active Recall* y repetición espaciada *SM-2*).
 
 ---
 
-## Arquitectura modular
+## Características principales
 
-La interfaz de usuario está completamente desacoplada del motor de procesamiento mediante un paquete `views/` independiente. `app.py` actúa como enrutador minimalista (< 80 líneas) y delega toda la lógica a los módulos correspondientes.
-
-### Paquete `views/` — Interfaz de usuario
-
-| Módulo | Responsabilidad |
-|--------|----------------|
-| `estilos.py` | Constantes CSS globales (`CSS_GLOBAL`), fuentes Inter/JetBrains Mono, `aplicar_estilos()`, `render_header()`, `render_terminal_topbar()` |
-| `sidebar.py` | `renderizar_sidebar(root_dir) → dict` — escaneo de `clases/`, botones de navegación, renombrado y eliminación de asignaturas |
-| `vista_individual.py` | `renderizar_vista_individual(root_dir, orquestador)` — formulario de subida, selector de archivo local, campo de URL remota, diálogo de checkpoint y consola de progreso en tiempo real |
-| `vista_lotes.py` | `renderizar_vista_lotes(root_dir, cola_manager, orquestador)` — formulario multi-archivo, bloque de URLs en masa (una por línea), panel de métricas y bucle secuencial de ejecución |
-| `editor_apuntes.py` | `renderizar_editor_apuntes(directorio_clase)` — visor/editor Markdown con backups `.bak`, botón de re-auditoría determinista y re-exportación a Notion |
-
-### Capa core `src/` — Lógica y orquestación
-
-| Módulo | Responsabilidad |
-|--------|----------------|
-| `orchestrator.py` | `PipelineOrchestrator` — motor central desacoplado de la UI; ejecuta las cinco fases secuenciales con callbacks de progreso y línea |
-| `downloader.py` | `descargar_audio(url, directorio, nombre_base, callback_progreso)` — descarga exclusiva de pista de audio via yt-dlp con `FFmpegExtractAudio → m4a` |
-| `transcribir.py` | Extracción de audio PCM con FFmpeg y transcripción Whisper con timestamps `[HH:MM:SS]` por segmento |
-| `generar_apuntes.py` | Chunking ~9 000 caracteres, síntesis Map-Reduce con Ollama/Qwen 2.5 y descarga determinista de VRAM post-inferencia |
-| `auditor.py` | Validación determinista de apuntes: cobertura de timestamps, sintaxis de bloques de código y orden cronológico |
-| `cola_manager.py` | `ColaManager` — persistencia atómica de `cola_trabajo.json`, gestión de estados y `reconciliar_trabajos_huerfanos()` |
-| `checkpoint_manager.py` | `CheckpointManager` — persistencia de sesión en `session_state.json`; permite reanudar transcripciones interrumpidas |
-| `notion_exporter.py` | Conversión Markdown → bloques Notion API v1 en lotes de 100 |
-| `notificador.py` | Alertas Telegram por clase completada, balance de lotes y errores críticos |
+- **Ingesta Multimodal Universal:**
+  - **Archivos de audio/vídeo locales:** MP4, MKV, MP3, M4A y WAV.
+  - **Presentaciones PowerPoint (`.pptx`):** Extracción nativa de textos de diapositivas y notas del orador mediante `python-pptx`.
+  - **Documentos de texto (`.pdf`):** Extracción estructurada página a página con `pypdf`.
+  - **Enlaces remotos:** Extracción de pistas de audio con `yt-dlp` desde Blackboard, YouTube o Panopto sin descargar el vídeo.
+- **Síntesis Pedagógica Local con LLMs:**
+  - División inteligente por fragmentos (*chunking* ~9 000 caracteres) y síntesis Map-Reduce usando **Ollama / Qwen 2.5 7B**.
+  - Formato Markdown riguroso con glosario de términos clave, ejemplos de código y marcas de tiempo `[HH:MM:SS]`.
+  - Política de **descarga determinista de VRAM** (`keep_alive: 0`) para evitar colisiones OOM entre Whisper y Ollama.
+- **Active Recall & Repetición Espaciada (SM-2 Lite):**
+  - Generación automática de preguntas tipo test de 4 opciones por cada clase procesada.
+  - Algoritmo SM-2 Lite con persistencia local en `data/stats.json` y `data/preguntas.json`.
+  - Interfaz interactiva de práctica con conteo de rachas, tarjetas pendientes de repaso y feedback explicativo inmediato.
+- **Visor y Editor de Apuntes en Vivo:**
+  - Interfaz estilo *Obsidian Flow* con renderizado tipográfico refinado y editor en caliente.
+  - Guardado atómico con preservación de copias de seguridad `.bak`.
+- **Exportación e Integraciones:**
+  - **Notion API v1:** Envío directo estructurado en lotes de bloques a bases de datos de Notion.
+  - **Telegram Bot:** Notificaciones instantáneas al completar el procesamiento o ante errores críticos.
+- **Telemetría en Tiempo Real (SSE):**
+  - Monitorización paso a paso del progreso vía *Server-Sent Events* con barra de progreso y mensajes informativos en vivo.
 
 ---
 
@@ -73,69 +119,49 @@ La interfaz de usuario está completamente desacoplada del motor de procesamient
 
 ```mermaid
 flowchart TD
-    subgraph ENTRADA["Entrada"]
-        A1["Archivo Local\n(MP4 · MKV · MP3 · M4A · WAV)"]
-        A2["URL Remota\n(Blackboard · YouTube · Panopto…)"]
+    subgraph ENTRADA["Entrada Multimodal"]
+        A1["Grabación Local\n(MP4 · MKV · MP3 · WAV)"]
+        A2["URL Remota\n(Blackboard · YouTube · Panopto)"]
+        A3["Presentación\n(.pptx)"]
+        A4["Documento / Temario\n(.pdf)"]
     end
 
-    subgraph UI["Interfaz — views/"]
-        B["app.py\nEnrutador < 80 líneas"]
-        B --> B1["vista_individual.py"]
-        B --> B2["vista_lotes.py"]
-        B --> B3["editor_apuntes.py"]
+    subgraph CLIENTE["Frontend SPA — React 19 + TypeScript"]
+        UI1["Dashboard & Métricas"]
+        UI2["Formulario de Ingesta (SSE)"]
+        UI3["Explorador de Asignaturas"]
+        UI4["Editor de Apuntes Markdown"]
+        UI5["Módulo Active Recall (SM-2)"]
     end
 
-    subgraph CORE["Core — src/"]
-        C["orchestrator.py\nPipelineOrchestrator"]
-
-        subgraph F0["Fase 0 (URLs)"]
-            D["downloader.py\nyt-dlp → .m4a"]
-        end
-
-        subgraph F1["Fase 1: Transcripción"]
-            E["transcribir.py\nFFmpeg → PCM 16 kHz"]
-            E --> E1{"Plataforma"}
-            E1 -->|"macOS Metal"| E2["mlx-whisper\nGPU Unificada"]
-            E1 -->|"Windows CUDA"| E3["faster-whisper\nfloat16 / int8"]
-            E2 & E3 --> E4["transcripcion.txt\ncon marcas HH:MM:SS"]
-        end
-
-        subgraph F2["Fase 2: Síntesis LLM"]
-            F["generar_apuntes.py\nChunking ~9 000 ch"]
-            F --> G["Ollama · Qwen 2.5 7B\nMap-Reduce"]
-            G --> G1["VRAM Unload\nkeep_alive: 0"]
-            G1 --> H["apuntes.md"]
-        end
-
-        subgraph F3["Fase 3: Auditoría"]
-            I["auditor.py\nValidación determinista"]
-        end
-
-        subgraph F4["Fase 4: Exportación"]
-            J["notion_exporter.py\nAPI v1 · lotes 100 bloques"]
-        end
-
-        subgraph F5["Fase 5: Notificación"]
-            K["notificador.py\nTelegram Bot"]
-        end
+    subgraph SERVIDOR["Backend — FastAPI (localhost:8000)"]
+        API["API REST & EventStream (/api)"]
+        JM["JobManager (Background Threads)"]
+        CS["ClassService & StudyService"]
+        ES["ExportService (Notion & Telegram)"]
     end
 
-    subgraph PERSISTENCIA["Persistencia local"]
-        P1["session_state.json\nCheckpoint por clase"]
-        P2["cola_trabajo.json\nCola atómica de lotes"]
+    subgraph CORE["Motor Core — src/"]
+        ORCH["PipelineOrchestrator"]
+        DOWN["downloader.py (yt-dlp)"]
+        DOCS["extractores_documentos.py (pptx / pdf)"]
+        TRANS["transcribir.py (FFmpeg + Whisper)"]
+        LLM["generar_apuntes.py (Ollama Qwen 2.5)"]
+        SE["study_engine.py (SM-2 Lite)"]
     end
 
-    A1 --> B1
-    A2 --> B1
-    A2 --> B2
-    A1 --> B2
-    B1 & B2 --> C
-    C --> D --> E
-    C --> E
-    E4 --> F
-    H --> I --> J --> K
-    C <--> P1
-    C <--> P2
+    subgraph STORAGE["Almacenamiento Local-First"]
+        FS1["clases/<materia>/<clase>/"]
+        FS2["data/stats.json & preguntas.json"]
+        FS3["data/.procesando.lock"]
+    end
+
+    A1 & A2 & A3 & A4 --> UI2
+    UI1 & UI2 & UI3 & UI4 & UI5 <--> API
+    API --> JM & CS & ES
+    JM --> ORCH
+    ORCH --> DOWN & DOCS & TRANS & LLM & SE
+    ORCH <--> STORAGE
 ```
 
 ---
@@ -144,54 +170,76 @@ flowchart TD
 
 ```text
 asistente-daw/
-├── app.py                          # Enrutador principal Streamlit (< 80 líneas)
-├── Iniciar_Mac.command             # Lanzador de un clic para macOS
+├── Iniciar_Mac.command             # Lanzador de un clic para macOS (FastAPI + React en :8000)
 ├── Iniciar_Windows.vbs             # Lanzador silencioso para Windows
-├── requirements-mac.txt            # Dependencias macOS
-├── requirements-win.txt            # Dependencias Windows
-├── .env.example                    # Plantilla de variables de entorno
-├── .gitignore
+├── requirements-mac.txt            # Dependencias Python para macOS (Metal)
+├── requirements-win.txt            # Dependencias Python para Windows (CUDA)
+├── .env.example                    # Plantilla de variables de entorno (Notion / Telegram)
+├── .gitignore                      # Exclusiones de Git
 │
-├── views/                          # Paquete de interfaz de usuario (Streamlit)
-│   ├── __init__.py
-│   ├── estilos.py                  # CSS global, fuentes personalizadas
-│   ├── sidebar.py                  # Explorador de asignaturas y navegación
-│   ├── vista_individual.py         # Subida local · URL remota · consola en tiempo real
-│   ├── vista_lotes.py              # Cola de archivos y URLs · métricas · ejecución secuencial
-│   └── editor_apuntes.py           # Editor Markdown · backups · re-auditoría · Notion
+├── frontend/                       # Aplicación SPA (React 19, TypeScript, Vite, Tailwind v4)
+│   ├── package.json
+│   ├── vite.config.ts              # Configuración de proxy a :8000 y compilación
+│   ├── src/
+│   │   ├── App.tsx                 # Enrutador y layout principal Obsidian Flow
+│   │   ├── main.tsx
+│   │   ├── index.css               # Tokens de diseño y paleta oscura
+│   │   ├── components/             # Componentes React
+│   │   │   ├── Header.tsx          # Barra superior y estado de conexión
+│   │   │   ├── Sidebar.tsx         # Árbol de asignaturas, clases y acciones rápidas
+│   │   │   ├── Dashboard.tsx       # Métricas de estudio, racha e inicio de tareas
+│   │   │   ├── NewClassForm.tsx    # Ingesta multimodal con barra SSE de progreso
+│   │   │   ├── NotesEditor.tsx     # Visor/Editor Markdown, export a Notion y Telegram
+│   │   │   └── PracticeSession.tsx # Sesión interactiva de repaso espaciado SM-2
+│   │   ├── services/
+│   │   │   └── api.ts              # Cliente API tipado y consumidor de EventSource
+│   │   └── types/                  # Definiciones TypeScript de datos
+│   └── dist/                       # Build estático servido directamente por FastAPI
 │
-├── src/                            # Capa core — orquestación y lógica
-│   ├── __init__.py
+├── src/                            # Backend FastAPI y lógica del núcleo
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── main.py                 # Servidor FastAPI REST + montaje SPA estática
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── class_service.py        # Gestión de archivos, notas y carpetas en clases/
+│   │   ├── job_service.py          # Gestor de tareas asíncronas con streaming SSE
+│   │   ├── study_service.py        # Servicios del algoritmo SM-2 y banco de preguntas
+│   │   └── export_service.py       # Servicios de exportación a Notion y avisos Telegram
 │   ├── orchestrator.py             # PipelineOrchestrator — motor central desacoplado
+│   ├── extractores_documentos.py   # Extractores nativos de diapositivas PPTX y PDFs
 │   ├── downloader.py               # Descarga de audio remoto via yt-dlp
-│   ├── transcribir.py              # Fase 1 — FFmpeg + Whisper con timestamps
-│   ├── generar_apuntes.py          # Fase 2 — Síntesis LLM + descarga VRAM
+│   ├── transcribir.py              # Extracción PCM con FFmpeg + Whisper (Metal/CUDA)
+│   ├── generar_apuntes.py          # Síntesis LLM estructurada + descarga VRAM
+│   ├── study_engine.py             # Motor matemático SM-2 Lite y generador de preguntas
 │   ├── auditor.py                  # Auditoría determinista de apuntes
-│   ├── cola_manager.py             # Cola persistente de trabajos por lotes
-│   ├── checkpoint_manager.py       # Checkpoint y reanudación de sesiones
 │   ├── notion_exporter.py          # Exportación a Notion API v1
 │   ├── notificador.py              # Alertas Telegram
-│   └── procesar_clase.py           # Punto de entrada CLI (sin UI)
+│   └── procesar_clase.py           # CLI sin interfaz gráfica
 │
-├── clases/                         # Salida local organizada por materia y clase
-│   └── <Asignatura>/<Clase>/
-│       ├── audio_original.m4a      # Audio descargado (URLs remotas)
+├── views/                          # Interfaz legacy Streamlit (soporte secundario)
+│   ├── app.py                      # Enrutador Streamlit
+│   └── ...
+│
+├── clases/                         # Repositorio local de asignaturas y apuntes
+│   └── <Materia>/<Clase>/
+│       ├── audio_original.m4a      # Pista de audio descargada (si aplica)
 │       ├── transcripcion.txt       # Transcripción con marcas de tiempo
-│       ├── apuntes.md              # Apuntes generados por el LLM
-│       ├── apuntes.md.bak          # Backup previo a ediciones manuales
-│       └── session_state.json      # Checkpoint de la sesión de procesamiento
+│       ├── apuntes.md              # Apuntes estructurados en Markdown
+│       ├── preguntas.json          # Banco de preguntas SM-2 de la clase
+│       └── session_state.json      # Checkpoint de la sesión
+│
+├── data/                           # Persistencia global de estudio
+│   ├── stats.json                  # Racha, tarjetas revisadas y estadísticas globales
+│   └── preguntas.json              # Banco unificado de preguntas y estados SM-2
 │
 ├── scripts/
-│   ├── setup_mac.command           # Instalador macOS (crea venv, instala FFmpeg)
-│   ├── setup_mac.sh
-│   ├── setup_windows.bat           # Instalador Windows (crea venv_win, verifica CUDA)
-│   └── lanzador_win.bat            # Arranca Ollama y el servidor Streamlit en Windows
+│   ├── setup_mac.sh / .command     # Asistente de instalación en macOS
+│   ├── setup_windows.bat           # Asistente de instalación en Windows
+│   └── lanzador_win.bat            # Arrancador dual (Ollama + FastAPI)
 │
-├── tests/
-│   └── test_auditor.py
-├── CONTRIBUTING.md
-├── LICENSE
-└── README.md
+└── tests/
+    └── test_auditor.py
 ```
 
 ---
@@ -200,9 +248,9 @@ asistente-daw/
 
 ### Política de VRAM determinista
 
-Ollama mantiene el modelo cargado en VRAM durante 5 minutos por defecto (`keep_alive=5m`) después de cada petición. En equipos con GPU de 8 GB, esto causa colisiones de memoria cuando Whisper intenta cargar su propio modelo antes de que Ollama libere la VRAM. En macOS, la memoria unificada comparte el presupuesto entre CPU y GPU, por lo que el problema de contención también aplica con memorias de 8 GB.
+Ollama mantiene el modelo cargado en memoria de vídeo durante 5 minutos por defecto (`keep_alive=5m`). En equipos con GPU o memoria unificada de 8 GB a 16 GB, esto puede causar contención o fallos de memoria cuando Whisper carga su modelo.
 
-**Solución implementada:** `src/generar_apuntes.py` envía una llamada de descarga determinista con `keep_alive: 0` inmediatamente tras finalizar cada petición de síntesis, independientemente de si la petición tuvo éxito o falló. Esto se ejecuta dentro de un bloque `finally` para garantizar la liberación incluso ante errores:
+**Solución implementada:** `src/generar_apuntes.py` ejecuta una llamada de descarga con `keep_alive: 0` dentro de un bloque `finally` tras cada petición de inferencia. Esto expulsa el modelo de la VRAM al instante, dejando la GPU libre para las siguientes tareas.
 
 ```python
 # src/generar_apuntes.py — descarga determinista de VRAM
@@ -212,55 +260,29 @@ finally:
     descargar_modelo_ollama(MODELO_OLLAMA)  # keep_alive: 0
 ```
 
-La función `descargar_modelo_ollama()` realiza una llamada `POST /api/generate` con `keep_alive: 0`, que instruye a Ollama a expulsar el modelo de VRAM inmediatamente, dejando la GPU disponible para la siguiente fase de transcripción en la cola de lotes.
+### Tolerancia a fallos y control de concurrencia
 
-### Cola de procesamiento y tolerancia a fallos
-
-#### Persistencia atómica de la cola (`cola_trabajo.json`)
-
-`ColaManager` mantiene la lista de trabajos en un archivo JSON cuya escritura se realiza de forma atómica mediante un archivo temporal seguido de `os.replace()`. Esto garantiza que la cola nunca quede en un estado corrupto por interrupciones a mitad de escritura (cierres forzosos, pérdidas de alimentación). Cada trabajo registra su estado (`pendiente`, `en_progreso`, `completado`, `error`) y el mensaje de error truncado en caso de fallo.
-
-#### Reconciliación de trabajos huérfanos
-
-Cuando el proceso Streamlit se interrumpe mientras un trabajo se encuentra en estado `en_progreso` (cierre del navegador, caída de WebSocket, reinicio del sistema), el trabajo queda bloqueado en ese estado y no se procesa en reinicios posteriores.
-
-Al arrancar, `app.py` invoca `cola_manager.reconciliar_trabajos_huerfanos()`, que reclasifica todos los trabajos `en_progreso` a `pendiente`. En la siguiente ejecución de la cola, esos trabajos se retoman desde el principio o, si existe un checkpoint de sesión válido, desde el último segmento transcrito.
-
-#### Checkpoint de sesión (`session_state.json`)
-
-`CheckpointManager` persiste el estado de cada sesión de transcripción en el directorio de la clase: número de segmentos transcritos, último timestamp cubierto y fase actual del pipeline. Si el proceso se interrumpe durante la transcripción de una clase larga, la interfaz detecta el checkpoint al volver a seleccionar el archivo y ofrece:
-
-- **Reanudar:** continúa desde el último segmento registrado, omitiendo el audio ya procesado.
-- **Empezar de nuevo:** purga el checkpoint y ejecuta el pipeline completo.
+- **Control de concurrencia mediante Lockfile:** `data/.procesando.lock` previene que múltiples procesos o peticiones solapen ejecuciones pesadas en local.
+- **Escritura atómica de ficheros:** Tanto los apuntes (`apuntes.md`) como los archivos de estado (`stats.json`, `cola_trabajo.json`) se guardan escribiendo primero en un fichero temporal y realizando posteriormente un reemplazo atómico (`os.replace`), eliminando el riesgo de archivos corruptos ante cortes de corriente.
+- **Puntos de control (Checkpoints):** `session_state.json` almacena el último segmento procesado en transcripciones extensas para permitir reanudar el trabajo en caso de interrupción.
 
 ---
 
 ## Requisitos del sistema
 
-### Comunes
+### Requisitos Comunes
 
-| Requisito | Versión mínima | Notas |
-|-----------|---------------|-------|
-| Python | 3.10 | Añadir al PATH en Windows |
-| FFmpeg | cualquiera estable | Instalado por los scripts de setup |
-| Ollama | cualquiera estable | [ollama.com](https://ollama.com) |
-| yt-dlp | 2024.x o posterior | Instalado automáticamente via `requirements` |
+| Componente | Requisito mínimo | Notas |
+|------------|------------------|-------|
+| Python | 3.10 o superior | Incluir en el PATH del sistema |
+| Node.js / npm | Node 18+ / npm 9+ | Requerido para compilar el frontend React |
+| FFmpeg | Versión estable | Instalado automáticamente por los scripts de configuración |
+| Ollama | Última versión | [ollama.com](https://ollama.com) |
 
-### Windows (NVIDIA CUDA)
+### Plataformas soportadas
 
-| Requisito | Detalle |
-|-----------|---------|
-| CUDA Toolkit | 12.x |
-| VRAM recomendada | 8 GB para `float16`; con menos, el sistema degrada a `int8` en CPU |
-| Driver NVIDIA | compatible con CUDA 12 |
-
-### macOS (Apple Silicon)
-
-| Requisito | Detalle |
-|-----------|---------|
-| Chip | M1, M2, M3 o M4 |
-| Memoria unificada | 8 GB mínimo; 16 GB recomendado para clases largas |
-| Homebrew | para instalar FFmpeg automáticamente |
+- **macOS (Apple Silicon):** M1, M2, M3 o M4 con soporte acelerado Metal vía `mlx-whisper`.
+- **Windows (NVIDIA CUDA):** GPU con soporte CUDA 12 y aceleración vía `faster-whisper`. Con menos de 8 GB de VRAM el sistema se adapta a inferencia cuantizada `int8`.
 
 ---
 
@@ -273,203 +295,141 @@ git clone https://github.com/<usuario>/asistente-daw.git
 cd asistente-daw
 ```
 
-### 2. Ejecutar el instalador de dependencias
+### 2. Ejecutar el asistente de entorno
 
-**macOS:**
-
+**En macOS:**
 ```bash
 bash scripts/setup_mac.sh
 ```
 
-O bien hacer doble clic en `scripts/setup_mac.command`.
+**En Windows:**
+Ejecutar haciendo doble clic en `scripts/setup_windows.bat`.
 
-**Windows:**
+### 3. Compilar la aplicación Frontend
 
-Doble clic en `scripts/setup_windows.bat`.
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+*El resultado compilado se deposita en `frontend/dist/` y será servido automáticamente por FastAPI.*
 
-El script crea el entorno virtual (`venv` en macOS, `venv_win` en Windows), instala las dependencias del archivo de requisitos correspondiente, verifica la presencia de FFmpeg e instala yt-dlp.
-
-### 3. Descargar el modelo de Ollama
+### 4. Descargar el modelo de Ollama
 
 ```bash
 ollama pull qwen2.5:7b
 ```
+*(Whisper `large-v3-turbo` se descarga automáticamente en la primera transcripción).*
 
-El modelo Whisper `large-v3-turbo` se descarga automáticamente en el primer uso.
+### 5. Configurar las variables de entorno
 
-### 4. Configurar las variables de entorno
-
-Copiar `.env.example` a `.env` y rellenar los valores:
+Copiar la plantilla `.env.example` a `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
+Configurar los tokens deseados:
+
 ```env
-# ── Notion ────────────────────────────────────────────────────────────────────
+# Notion (Opcional - para exportación directa)
 NOTION_TOKEN=ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# ── Telegram (opcional) ───────────────────────────────────────────────────────
+# Telegram (Opcional - para alertas y resúmenes al móvil)
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ
 TELEGRAM_CHAT_ID=123456789
 ```
-
-#### Obtener las credenciales de Notion
-
-1. Acceder a [notion.so/my-integrations](https://www.notion.so/my-integrations) y crear una integración interna.
-2. Copiar el **Internal Integration Secret** como valor de `NOTION_TOKEN`.
-3. Abrir la base de datos de Notion de destino, seleccionar "Conexiones" en el menú de opciones y conectar la integración creada.
-4. Copiar el ID de la base de datos desde la URL: `https://www.notion.so/<workspace>/<DATABASE_ID>?v=...`.
 
 ---
 
 ## Uso
 
-### Lanzadores de un clic (modo habitual)
+### Lanzador rápido (Recomendado)
 
-| Sistema | Archivo |
-|---------|---------|
-| macOS | `Iniciar_Mac.command` — activa el entorno virtual y ejecuta `streamlit run app.py` |
-| Windows | `Iniciar_Windows.vbs` — inicia Ollama en segundo plano, lanza el servidor Streamlit y abre el navegador en `http://localhost:8501` |
+- **macOS:** Doble clic en `Iniciar_Mac.command`.
+- **Windows:** Doble clic en `Iniciar_Windows.vbs` o `scripts/lanzador_win.bat`.
+
+Ambos scripts arrancan el servidor unificado FastAPI en segundo plano y abren el navegador en **`http://127.0.0.1:8000`**.
 
 ### Ejecución manual
 
 ```bash
-# Activar el entorno virtual
+# 1. Activar entorno virtual
 source venv/bin/activate          # macOS
 venv_win\Scripts\activate.bat     # Windows
 
-# Iniciar la interfaz web
-streamlit run app.py
+# 2. Iniciar el servidor unificado
+python -m uvicorn src.api.main:app --port 8000 --host 127.0.0.1
 
-# Ejecutar el pipeline completo desde CLI (sin interfaz)
-python src/procesar_clase.py "Nombre Materia" "Nombre Clase" ruta/archivo.mp4
+# 3. (Opcional) Ejecución por consola pura sin interfaz
+python src/procesar_clase.py "Sistemas" "Tema 1" ruta/al/archivo.mp4
 ```
 
-### Flujo de trabajo desde la interfaz
-
-1. **Nueva Clase** — elegir asignatura, nombre del tema y origen del material.
-2. **Origen del material:**
-   - `Subir nuevo archivo` — arrastrar MP4, MKV, MP3, M4A o WAV.
-   - `Usar un archivo ya guardado` — seleccionar de los archivos ya presentes en `clases/`.
-   - `URL / Enlace remoto` — pegar un enlace de Blackboard, YouTube, Panopto u otra plataforma compatible con yt-dlp.
-3. Pulsar **Iniciar Procesamiento** — la barra de progreso y la consola muestran cada fase en tiempo real.
-4. Al finalizar, los apuntes aparecen en pantalla con la opción de exportarlos a Notion.
-5. Seleccionar una clase en el panel lateral para acceder al **Editor de Apuntes** con edición en caliente y re-auditoría.
-
-### Procesamiento por lotes
-
-1. Pulsar **Por Lotes** en el panel lateral.
-2. Añadir archivos locales con el selector múltiple o pegar varias URLs (una por línea) en el área de texto.
-3. Pulsar **Iniciar Cola** — el sistema procesa cada trabajo de forma secuencial, actualiza las métricas en tiempo real y envía una notificación Telegram al completar el lote.
+*(La interfaz legacy de Streamlit continúa disponible como respaldo ejecutando `streamlit run app.py` en el puerto 8501).*
 
 ---
 
 ## Extracción desde Blackboard / Campus Virtual
 
-### Por qué no se descarga el vídeo completo
-
-Los vídeos de Blackboard Collaborate, Panopto u otras plataformas educativas suelen pesar entre 1 y 3 GB y están protegidos por sesiones autenticadas. Descargarlos directamente requiere autenticación de browser, almacenamiento adicional y tiempo de transferencia.
-
-LectureFlow solo necesita la **pista de audio** (típicamente 50–150 MB en M4A). yt-dlp selecciona automáticamente el stream de audio de menor tamaño disponible (`bestaudio/best`) y descarta el vídeo, reduciendo el tiempo de descarga a menos de un minuto en conexiones normales.
+LectureFlow no necesita descargar vídeos pesados de 2 a 3 GB desde Blackboard Collaborate o Panopto. Mediante este bookmarklet se extrae exclusivamente la pista de audio en segundos.
 
 ### Configurar el Bookmarklet "Extraer Blackboard"
 
-El bookmarklet extrae la URL del stream de vídeo activo desde cualquier reproductor HTML5 y la copia al portapapeles, lista para pegarla en LectureFlow.
-
-**Pasos de configuración (se hace una sola vez):**
-
-1. Mostrar la barra de marcadores/favoritos del navegador (`Ctrl+Shift+B` en Chrome/Edge, `Cmd+Shift+B` en Safari).
-2. Hacer clic derecho sobre la barra de marcadores → **Añadir página** o **Nuevo marcador**.
-3. En el campo **Nombre**, escribir: `Extraer Blackboard`
-4. En el campo **URL / Dirección**, pegar el siguiente código JavaScript completo:
-
-```javascript
-javascript:(function(){const v=document.querySelector('video')||document.querySelector('source');if(v&&v.src){navigator.clipboard.writeText(v.src).then(()=>{alert('✅ Enlace copiado al portapapeles:\n\n'+v.src.substring(0,100)+'...');});}else{alert('❌ Dale al Play al vídeo primero y vuelve a pulsar este botón.');}})();
-```
-
-5. Guardar el marcador.
-
-### Flujo de uso diario (~30 segundos)
-
-```
-1. Abrir la clase grabada en Blackboard / Campus Virtual
-2. Pulsar ▶ Play en el reproductor de vídeo (esperar 2–3 segundos)
-3. Hacer clic en el marcador "Extraer Blackboard" de la barra del navegador
-4. El enlace del stream se copia automáticamente al portapapeles
-5. Ir a LectureFlow → Nueva Clase → URL / Enlace remoto
-6. Pegar el enlace (Ctrl+V / Cmd+V) y pulsar Iniciar Procesamiento
-```
-
-yt-dlp descarga exclusivamente la pista de audio (.m4a) y el pipeline de transcripción y síntesis se ejecuta de forma automática.
-
-> **Nota:** El enlace de stream suele contener un token de sesión con caducidad. Si la descarga falla con un error 403, recargar la página de Blackboard, reproducir el vídeo de nuevo y repetir el proceso del bookmarklet.
+1. Mostrar la barra de marcadores del navegador (`Ctrl+Shift+B` o `Cmd+Shift+B`).
+2. Crear un nuevo marcador:
+   - **Nombre:** `Extraer Blackboard`
+   - **URL / Dirección:** Copiar y pegar el siguiente código:
+     ```javascript
+     javascript:(function(){const v=document.querySelector('video')||document.querySelector('source');if(v&&v.src){navigator.clipboard.writeText(v.src).then(()=>{alert('✅ Enlace copiado al portapapeles:\n\n'+v.src.substring(0,100)+'...');});}else{alert('❌ Dale al Play al vídeo primero y vuelve a pulsar este botón.');}})();
+     ```
+3. **Uso en 3 pasos:**
+   - Abrir la grabación en Blackboard y pulsar ▶ Play.
+   - Pulsar el marcador en el navegador para copiar la URL del stream.
+   - Pegar el enlace en LectureFlow seleccionando "URL / Enlace remoto".
 
 ---
 
 ## Notificaciones Telegram
 
-LectureFlow envía notificaciones automáticas a un bot de Telegram configurado en `.env`. Si los valores no están definidos, las notificaciones se deshabilitan silenciosamente sin afectar al pipeline.
-
-### Configuración del bot
-
-1. Hablar con [@BotFather](https://t.me/BotFather) en Telegram → `/newbot` → seguir el asistente → copiar el token generado.
-2. Enviar `/start` al bot recién creado.
-3. Visitar `https://api.telegram.org/bot<TOKEN>/getUpdates` y copiar el valor `"id"` del primer resultado como `TELEGRAM_CHAT_ID`.
-4. Añadir ambos valores al archivo `.env`:
-
-```env
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ
-TELEGRAM_CHAT_ID=123456789
-```
-
-### Tipos de alertas
-
-| Evento | Contenido del mensaje |
-|--------|-----------------------|
-| **Clase individual completada** | Nombre de la clase, duración del proceso, enlace directo a la página de Notion generada |
-| **Lote completado** | Total de trabajos procesados, número de éxitos y número de errores |
-| **Error crítico** | Nombre del contexto (clase o materia), primeras 300 caracteres del mensaje de excepción |
+1. Crear un bot con [@BotFather](https://t.me/BotFather) en Telegram y obtener el `TELEGRAM_BOT_TOKEN`.
+2. Enviar `/start` al bot y consultar `https://api.telegram.org/bot<TOKEN>/getUpdates` para obtener el `TELEGRAM_CHAT_ID`.
+3. Guardar las credenciales en `.env`. LectureFlow notificará al completar cada clase con métricas y enlaces directos a Notion.
 
 ---
 
 ## Tecnologías
 
-| Componente | Tecnología |
-|------------|-----------|
-| Interfaz web | [Streamlit](https://streamlit.io/) |
-| Descarga de audio remoto | [yt-dlp](https://github.com/yt-dlp/yt-dlp) + FFmpeg Extract Audio → M4A |
-| Extracción de audio local | [FFmpeg](https://ffmpeg.org/) — PCM mono 16 kHz |
-| Transcripción macOS | [mlx-whisper](https://github.com/ml-explore/mlx-examples) — aceleración Metal |
-| Transcripción Windows | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — CUDA 12 / CPU int8 |
-| Modelo de transcripción | Whisper `large-v3-turbo` |
-| Inferencia LLM | [Ollama](https://ollama.com/) con Qwen 2.5 7B — VRAM unload determinista |
-| Exportación | [Notion API v1](https://developers.notion.com/) — lotes de 100 bloques |
-| Notificaciones | Telegram Bot API |
+| Área | Tecnología | Propósito |
+|------|------------|-----------|
+| **Frontend** | React 19 + TypeScript + Vite | SPA moderna de alta reactividad |
+| **Estilos** | Tailwind CSS v4 | Sistema de diseño oscuro Obsidian Flow |
+| **Backend & API** | FastAPI + Uvicorn | API REST de alto rendimiento y servidor estático |
+| **Eventos en vivo** | Server-Sent Events (SSE) | Telemetría continua de progreso de procesamiento |
+| **Extracción PPTX** | `python-pptx` | Ingesta de texto y notas de orador de diapositivas |
+| **Extracción PDF** | `pypdf` | Ingesta y formateo estructurado de documentos de texto |
+| **Transcripción** | Whisper `large-v3-turbo` | mlx-whisper (Metal) / faster-whisper (CUDA) |
+| **Inferencia LLM** | Ollama + Qwen 2.5 7B | Síntesis estructurada y preguntas tipo test |
+| **Active Recall** | Algoritmo SM-2 Lite | Repetición espaciada y bancos de preguntas |
+| **Integraciones** | Notion API v1 & Telegram API | Exportación documental y notificaciones al móvil |
 
 ---
 
 ## Licencia
 
-MIT. Ver [LICENSE](LICENSE).
+Este proyecto está bajo la licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más información.
 
 ---
 
 ## Hoja de Ruta (Roadmap)
 
-- [x] Checkpoint y reanudación ante fallos de energía o sesión. Cada sesión de procesamiento persiste su estado en `session_state.json` (segmentos transcritos, timestamp, fase actual). Si el proceso se interrumpe antes de finalizar, la interfaz detecta el estado incompleto y ofrece continuar desde donde se quedó o comenzar de nuevo.
-
-- [x] Cola persistente de procesamiento por lotes con tolerancia a fallos. `cola_trabajo.json` almacena el estado de cada trabajo de forma atómica. `reconciliar_trabajos_huerfanos()` recupera automáticamente los trabajos interrumpidos en cada arranque.
-
-- [x] Descarga de audio remoto desde plataformas educativas. yt-dlp extrae exclusivamente la pista de audio de cualquier URL compatible (YouTube, Blackboard, Panopto, Vimeo, etc.) y la convierte a M4A antes de la transcripción. Compatible con el Bookmarklet de extracción de stream autenticado.
-
-- [x] Arquitectura modular MVC. `app.py` reducido a enrutador de < 80 líneas. Vistas encapsuladas en `views/`. Motor de procesamiento completamente desacoplado en `src/orchestrator.py`.
-
-- [x] Descarga determinista de VRAM tras inferencia Ollama. Llamada `keep_alive: 0` en bloque `finally` para evitar colisiones OOM entre Ollama y Whisper en GPUs de 8 GB.
-
-- [ ] Segmentación semántica por pausas y cambios de contexto. Sustituir la división por número fijo de caracteres por un algoritmo que detecte silencios prolongados y transiciones temáticas para generar fragmentos más coherentes y reducir la pérdida de contexto en los límites de bloque.
-
-- [ ] Deep-linking local desde marcas de tiempo hacia reproductores multimedia de escritorio. Generar hipervínculos del tipo `[HH:MM:SS]` en los apuntes que, al hacer clic, abran el archivo de vídeo o audio en el reproductor predeterminado del sistema operativo y salten directamente al instante correspondiente.
-
-- [ ] Resumen ejecutivo automático por asignatura. Generar un documento consolidado por materia que sintetice los conceptos principales de todas las clases procesadas, ordenados cronológicamente y con referencias cruzadas a los apuntes individuales en Notion.
+- [x] **Arquitectura desacoplada:** Frontend en React 19 + TypeScript y Backend en FastAPI sirviendo la SPA unificada.
+- [x] **Soporte multimodal completo:** Audio/Vídeo, URLs remotas (yt-dlp), diapositivas PPTX y documentos PDF.
+- [x] **Módulo de Active Recall (SM-2 Lite):** Generación automática de bancos de preguntas, persistencia de rachas y práctica interactiva.
+- [x] **Gestión atómica y tolerancia a fallos:** Checkpoint y reanudación ante fallos de energía, lockfiles contra concurrencia y guardado seguro.
+- [x] **Descarga determinista de VRAM:** Gestión de memoria GPU (`keep_alive: 0`) para evitar errores OOM entre Whisper y Ollama.
+- [x] **Exportación directa:** Envío de apuntes en un clic a Notion y Telegram desde la propia interfaz web.
+- [ ] **Segmentación semántica por pausas y cambios de contexto:** Refinamiento del algoritmo de fragmentación basado en detección de silencios.
+- [ ] **Deep-linking local con timestamps:** Hipervínculos `[HH:MM:SS]` que abren directamente el reproductor multimedia local en el segundo exacto.
+- [ ] **Resumen ejecutivo global por materia:** Documento transversal que consolide conceptos clave de todas las clases de un módulo.

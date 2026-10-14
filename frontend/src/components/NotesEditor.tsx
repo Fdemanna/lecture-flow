@@ -19,6 +19,9 @@ import {
   saveNotes,
   exportToNotion,
   sendTelegramNotification,
+  regenerateNotes,
+  subscribeToJobEvents,
+  type JobEvent,
 } from '../services/api'
 
 interface NotesEditorProps {
@@ -51,36 +54,85 @@ export function NotesEditor({
   const [sendingTelegram, setSendingTelegram] = useState<boolean>(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancel = false
+  // Estados de regeneración
+  const [regenerating, setRegenerating] = useState<boolean>(false)
+  const [regenProgress, setRegenProgress] = useState<number>(0)
+  const [regenMessage, setRegenMessage] = useState<string>('')
 
-    async function cargarApuntes() {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await getNotes(subject, className)
-        if (!cancel) {
-          setContent(res.contenido || '')
-          setSavedContent(res.contenido || '')
-          setLastModified(res.ultima_modificacion || null)
+  async function cargarApuntes() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await getNotes(subject, className)
+      setContent(res.contenido || '')
+      setSavedContent(res.contenido || '')
+      setLastModified(res.ultima_modificacion || null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar los apuntes.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    cargarApuntes()
+  }, [subject, className])
+
+  async function handleRegenerate() {
+    if (regenerating || saving) return
+
+    const confirmar = window.confirm(
+      '¿Regenerar apuntes usando los nuevos prompts? Los apuntes actuales se respaldarán automáticamente en un archivo .bak.'
+    )
+    if (!confirmar) return
+
+    setRegenerating(true)
+    setRegenProgress(5)
+    setRegenMessage('Iniciando tarea de regeneración...')
+    setError(null)
+
+    try {
+      const res = await regenerateNotes(subject, className)
+      subscribeToJobEvents(
+        res.job_id,
+        (ev: JobEvent) => {
+          setRegenProgress(ev.progress)
+          setRegenMessage(ev.message)
+
+          if (ev.status === 'completed') {
+            setRegenerating(false)
+            setToastMessage('¡Apuntes regenerados con éxito!')
+            cargarApuntes()
+            setTimeout(() => setToastMessage(null), 5000)
+          } else if (ev.status === 'failed' || ev.status === 'cancelled') {
+            setRegenerating(false)
+            setError(ev.error || ev.message || 'La regeneración ha fallado.')
+          }
+        },
+        () => {
+          setRegenMessage('Reconectando con el servidor...')
         }
-      } catch (err) {
-        if (!cancel) {
-          setError(err instanceof Error ? err.message : 'Error al cargar los apuntes.')
-        }
-      } finally {
-        if (!cancel) {
-          setLoading(false)
-        }
+      )
+    } catch (err: any) {
+      setRegenerating(false)
+      const is409 =
+        err?.status === 409 ||
+        err?.response?.status === 409 ||
+        (err instanceof Error &&
+          (err.message.includes('409') ||
+            err.message.toLowerCase().includes('conflicto') ||
+            err.message.toLowerCase().includes('conflict') ||
+            err.message.toLowerCase().includes('en curso')))
+
+      if (is409) {
+        setError(
+          '⚠️ Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
+        )
+      } else {
+        setError(err instanceof Error ? err.message : String(err))
       }
     }
-
-    cargarApuntes()
-
-    return () => {
-      cancel = true
-    }
-  }, [subject, className])
+  }
 
   async function handleSave() {
     if (saving) return
@@ -321,7 +373,7 @@ export function NotesEditor({
           {/* Botón Notificar Telegram */}
           <button
             onClick={handleSendTelegram}
-            disabled={sendingTelegram}
+            disabled={sendingTelegram || regenerating}
             style={{
               backgroundColor: 'rgba(56, 189, 248, 0.1)',
               border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -330,7 +382,7 @@ export function NotesEditor({
               padding: '6px 12px',
               fontSize: '0.82rem',
               fontWeight: 600,
-              cursor: sendingTelegram ? 'default' : 'pointer',
+              cursor: sendingTelegram || regenerating ? 'default' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -344,6 +396,30 @@ export function NotesEditor({
               <Send size={14} />
             )}
             <span>{sendingTelegram ? 'Enviando...' : '📱 Notificar Telegram'}</span>
+          </button>
+
+          {/* Botón Regenerar Apuntes */}
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating || saving || loading}
+            style={{
+              backgroundColor: 'rgba(128, 131, 255, 0.12)',
+              border: '1px solid rgba(128, 131, 255, 0.35)',
+              color: '#a5b4fc',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              cursor: regenerating || saving || loading ? 'default' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s',
+            }}
+            title="Regenerar apuntes a partir de la transcripción existente con los nuevos prompts"
+          >
+            <RefreshCw size={14} className={regenerating ? 'animate-spin' : ''} />
+            <span>{regenerating ? 'Regenerando...' : '🔄 Regenerar apuntes'}</span>
           </button>
 
           {/* Toast Feedback Temporal */}
@@ -433,6 +509,42 @@ export function NotesEditor({
           </button>
         </div>
       </div>
+
+      {/* Banner de Regeneración en Progreso con SSE */}
+      {regenerating && (
+        <div
+          style={{
+            margin: '12px 24px 0',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(128, 131, 255, 0.12)',
+            border: '1px solid rgba(128, 131, 255, 0.35)',
+            color: '#c7d2fe',
+            fontSize: '0.85rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <RefreshCw size={15} className="animate-spin" color="#8083ff" />
+              <span style={{ fontWeight: 600 }}>{regenMessage || 'Regenerando apuntes con nuevos prompts...'}</span>
+            </div>
+            <span style={{ fontSize: '0.8rem', color: '#8083ff', fontWeight: 700 }}>{regenProgress}%</span>
+          </div>
+          <div style={{ width: '100%', height: '5px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div
+              style={{
+                width: `${regenProgress}%`,
+                height: '100%',
+                backgroundColor: '#8083ff',
+                transition: 'width 0.3s ease',
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* 2. Banner de Error si ocurre */}
       {error && (

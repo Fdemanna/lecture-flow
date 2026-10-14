@@ -168,9 +168,23 @@ export function ProcessingPanel({ onJobFinished, onClose }: ProcessingPanelProps
       setLivePhase('iniciando')
       setLiveProgress(2)
       setLiveMessage('Iniciando pipeline...')
-      setLogs([`Job ${res.job_id} registrado correctamente.`])
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Error al lanzar el procesamiento.')
+    } catch (err: any) {
+      const is409 =
+        err?.status === 409 ||
+        err?.response?.status === 409 ||
+        (err instanceof Error &&
+          (err.message.includes('409') ||
+            err.message.toLowerCase().includes('conflicto') ||
+            err.message.toLowerCase().includes('conflict') ||
+            err.message.toLowerCase().includes('en curso')))
+
+      if (is409) {
+        setErrorMsg(
+          '⚠️ Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
+        )
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : String(err))
+      }
     } finally {
       setSubmitting(false)
     }

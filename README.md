@@ -222,7 +222,7 @@ Sin estas variables la aplicación funciona igual; los botones de exportación d
 Crea un marcador con este código como URL. Con el vídeo de la clase reproduciéndose, púlsalo y la URL del stream queda en el portapapeles, lista para pegar en LectureFlow:
 
 ```javascript
-javascript:(function(){const v=document.querySelector('video')||document.querySelector('source');if(v&&v.src){navigator.clipboard.writeText(v.src).then(()=>{alert('✅ Enlace copiado al portapapeles:\n\n'+v.src.substring(0,100)+'...');});}else{alert('❌ Dale al Play al vídeo primero y vuelve a pulsar este botón.');}})();
+javascript:(function(){const v=document.querySelector('video')||document.querySelector('source');if(v&&v.src){navigator.clipboard.writeText(v.src).then(()=>{alert('Enlace copiado al portapapeles:\n\n'+v.src.substring(0,100)+'...');});}else{alert('Dale al Play al vídeo primero y vuelve a pulsar este botón.');}})();
 ```
 
 Los enlaces llevan un token de sesión que caduca. Si la descarga da 403, recarga la página de Blackboard y repite.

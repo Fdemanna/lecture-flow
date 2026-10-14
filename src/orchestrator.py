@@ -70,6 +70,20 @@ def es_ruta_segura(ruta_destino: Union[str, Path], base: Union[str, Path] = CARP
     return candidata_real.startswith(base_real + os.sep) or candidata_real == base_real
 
 
+def obtener_python_venv() -> str:
+    """Devuelve la ruta al intérprete Python del entorno virtual del proyecto."""
+    if sys.platform == "win32":
+        py_win = ROOT_DIR / "venv_win" / "Scripts" / "python.exe"
+        if py_win.exists():
+            return str(py_win)
+    else:
+        py_mac = ROOT_DIR / "venv" / "bin" / "python"
+        if py_mac.exists():
+            return str(py_mac)
+    return sys.executable
+
+
+
 class PipelineOrchestrator:
     """Orquestador desacoplado del pipeline de procesamiento de clases.
 
@@ -507,3 +521,95 @@ class PipelineOrchestrator:
             if cola_manager and trabajo_id:
                 cola_manager.marcar_error(trabajo_id, str(resultado["error"])[:200])
             return False
+
+    def regenerar_apuntes_clase(
+        self,
+        materia: str,
+        clase: str,
+    ) -> Dict[str, Any]:
+        """Regenera los apuntes Markdown y el banco de preguntas a partir de la transcripción existente."""
+        materia_clean = normalizar_nombre(materia)
+        clase_clean = normalizar_nombre(clase)
+        directorio_clase = CARPETA_BASE / materia_clean / clase_clean
+
+        if not es_ruta_segura(directorio_clase):
+            raise ValueError(f"Ruta no permitida: {directorio_clase}")
+
+        ruta_transcripcion = directorio_clase / "transcripcion.txt"
+        if not ruta_transcripcion.exists():
+            raise ValueError(f"No existe transcripcion.txt para esta clase ({materia}/{clase})")
+
+        ruta_apuntes = directorio_clase / "apuntes.md"
+        ruta_preguntas = directorio_clase / "preguntas.json"
+
+        t_inicio = time.monotonic()
+        self._emitir_progreso("inicio", 5, f"Iniciando regeneración para '{clase_clean}'...")
+
+        # 1. Síntesis pedagógica directa con generar_apuntes.py
+        self._emitir_progreso("sintesis", 15, "Sintetizando apuntes con los nuevos prompts pedagógicos...")
+        cmd_apuntes = [
+            obtener_python_venv(), "-u",
+            str(ROOT_DIR / "src" / "generar_apuntes.py"),
+            str(ruta_transcripcion),
+            str(ruta_apuntes),
+        ]
+        try:
+            self._ejecutar_subproceso_stream(cmd_apuntes)
+        except Exception:
+            descargar_modelo_ollama(MODELO_OLLAMA)
+            raise
+
+        self._emitir_progreso("sintesis", 80, "Síntesis pedagógica completada.")
+
+        # 2. Generar banco de preguntas para Active Recall (SM-2)
+        texto_apuntes = ""
+        if ruta_apuntes.exists():
+            with open(ruta_apuntes, "r", encoding="utf-8") as f:
+                texto_apuntes = f.read()
+
+        preguntas_quiz: list[dict] = []
+        if texto_apuntes:
+            self._emitir_progreso("quiz", 85, "Regenerando banco de preguntas de evaluación activa...")
+            try:
+                preguntas_quiz = generar_preguntas_clase(
+                    texto_apuntes=texto_apuntes,
+                    materia=materia_clean,
+                    clase=clase_clean,
+                )
+                if preguntas_quiz:
+                    with open(ruta_preguntas, "w", encoding="utf-8") as f_quiz:
+                        json.dump(preguntas_quiz, f_quiz, indent=2, ensure_ascii=False)
+                    self._emitir_linea("\n[QUIZ] Banco de preguntas regenerado con éxito.\n")
+            except Exception as exc_quiz:
+                logger.warning("Fallo no crítico al regenerar preguntas para '%s': %s", clase_clean, exc_quiz)
+                self._emitir_linea(f"\n[AVISO QUIZ] No se pudieron generar las preguntas: {exc_quiz}\n")
+                descargar_modelo_ollama(MODELO_OLLAMA)
+
+        duracion_seg = int(time.monotonic() - t_inicio)
+        duracion_str = f"{duracion_seg // 60}m {duracion_seg % 60}s"
+
+        self._emitir_progreso("completado", 100, f"Apuntes y preguntas regenerados con éxito en {duracion_str}.")
+
+        return {
+            "exito": True,
+            "materia": materia_clean,
+            "clase": clase_clean,
+            "duracion": duracion_str,
+            "apuntes_generados": ruta_apuntes.exists(),
+            "preguntas_generadas": len(preguntas_quiz),
+        }
+
+
+def regenerar_apuntes_clase(
+    materia: str,
+    clase: str,
+    callback_progreso: Optional[ProgresoCallback] = None,
+    callback_linea: Optional[LineaCallback] = None,
+) -> Dict[str, Any]:
+    """Función de conveniencia para regenerar apuntes invocando a PipelineOrchestrator."""
+    orch = PipelineOrchestrator(
+        callback_progreso=callback_progreso,
+        callback_linea=callback_linea,
+    )
+    return orch.regenerar_apuntes_clase(materia, clase)
+

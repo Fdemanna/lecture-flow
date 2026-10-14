@@ -226,6 +226,34 @@ def api_notificar_telegram(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error inesperado: {e}")
 
 
+@app.post("/api/classes/{materia}/{clase}/regenerate")
+def api_regenerar_apuntes_clase(materia: str, clase: str) -> Dict[str, Any]:
+    """Inicia la regeneración de apuntes y preguntas a partir de transcripcion.txt existente."""
+    activo = job_manager.obtener_job_activo()
+    if activo:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": "Ya existe un procesamiento en curso.", "active_job": activo},
+        )
+
+    try:
+        res = job_manager.iniciar_regeneracion(materia=materia, clase=clase)
+        return {
+            "job_id": res["job_id"],
+            "status": "started",
+            "materia": materia,
+            "clase": clase,
+            "message": "Regeneración iniciada con éxito.",
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error inesperado: {e}")
+
+
+
 @app.get("/api/study/stats")
 def obtener_estadisticas() -> Dict[str, Any]:
     """Devuelve las estadísticas acumuladas de estudio (racha, XP y estado SM-2)."""

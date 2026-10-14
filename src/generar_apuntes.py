@@ -84,45 +84,61 @@ OPTIONS_BLOQUE = {
 }
 
 OPTIONS_UNIFICACION = {
-    "temperature": 0.1,
+    "temperature": 0.15,
     "num_ctx": 16384,
     "num_predict": 4096,
 }
 
 SYSTEM_PROMPT = (
-    "Eres un especialista pedagógico técnico especializado en el ciclo formativo de "
-    "Desarrollo de Aplicaciones Web (DAW). Tu tarea es transformar transcripciones de "
-    "clases técnicas en material de estudio estructurado, riguroso y en Markdown, "
-    "siguiendo con precisión milimétrica las directivas de fidelidad a la fuente, "
-    "timestamps y delimitación de ejemplos.\n\n"
-    "DIRECTIVAS ESTRICTAS DE PRIVACIDAD Y ENFOQUE PEDAGÓGICO:\n"
-    "- Prohibido incluir nombres propios de alumnos, profesores o menciones personales.\n"
-    "- Omite saludos iniciales, pausas de descanso, bromas, quejas sobre fechas de entrega o charlas informales del aula.\n"
-    "- Si un alumno plantea una duda técnica relevante durante la sesión, sintetízala como un bloque neutral: '💡 Duda frecuente / Error común' sin aludir a quién la formuló.\n"
-    "- Redacta con el tono sobrio, estructurado y formal de un libro de texto universitario o documentación técnica oficial."
+    "Eres un profesor experto en técnicas de estudio y desarrollo de software (DAW). "
+    "Tu tarea es convertir transcripciones de clase en apuntes rigurosos, esquemáticos, "
+    "sin redundancias y optimizados para el estudio activo."
 )
 
 REGLAS_MAESTRAS = """
-INSTRUCCIONES Y REGLAS ESTRICTAS:
+REGLAS PEDAGÓGICAS ESTRICTAS:
+1. DEFINICIÓN ÚNICA: Cada concepto se define UNA sola vez, exactamente en el punto donde se desarrolla ("## 2. Conceptos Clave"). Prohibido duplicar definiciones en introducciones, resúmenes, comparativas o glosarios.
+2. REGLAS NEGATIVAS CRÍTICAS:
+   - PROHIBIDO incluir timestamps [HH:MM:SS] dentro del cuerpo de los apuntes.
+   - PROHIBIDO incluir marcas como "(Verificar)" en el cuerpo (lo dudoso va exclusivamente a la sección "## 8. Pendiente de Revisar").
+   - PROHIBIDO incluir comentarios meta ("Este documento es una unificación...", "A continuación se presentan...").
+   - Prohibido inventar definiciones o código que no aparezca en la clase.
+3. CONCISIÓN Y SINTAXIS: Frases cortas y directas. Prefiere esquemas, tablas de comparación y secuencias operativas antes que párrafos densos. La longitud debe ocupar como máximo un 30% del material original.
+4. CÓDIGO FUNCIONAL: Fragmentos en bloques funcionales con sintaxis resaltada y comandos de terminal cuando aplique, funcionales y directamente basados en la clase.
+5. PRIVACIDAD: No incluyas nombres propios de alumnos ni del profesor, ni menciones personales. Escribe "un alumno", "una alumna" o "el profesor".
+"""
 
-DIRECTIVAS ESTRICTAS DE PRIVACIDAD Y ENFOQUE PEDAGÓGICO:
-- Prohibido incluir nombres propios de alumnos, profesores o menciones personales.
-- Omite saludos iniciales, pausas de descanso, bromas, quejas sobre fechas de entrega o charlas informales del aula.
-- Si un alumno plantea una duda técnica relevante durante la sesión, sintetízala como un bloque neutral: '💡 Duda frecuente / Error común' sin aludir a quién la formuló.
-- Redacta con el tono sobrio, estructurado y formal de un libro de texto universitario o documentación técnica oficial.
+# Estructura de salida compartida por clase única, fusión Tree-Reduce y unificación final.
+# Compatible con notion_exporter: el H1 se usa como título y el resto no pasa de H2.
+ESTRUCTURA_APUNTES = """
+ESTRUCTURA OBLIGATORIA DEL DOCUMENTO:
+# {titulo_tema}
 
-1. **Fuente única de verdad**: Usa exclusivamente la información contenida en la transcripción. No inventes ni completes con conocimiento externo salvo nota aclaratoria explícita. Si falta información o se corta, usa "❓ Contenido incompleto en este fragmento".
-2. **Estructura**: Usa encabezados (##, ###), listas, tablas o esquemas para ordenar el contenido.
-3. **Ejemplos del profesor**: Conserva casos concretos (valores específicos, nombres reales, ejercicios) en bloques individuales:
-   > 📌 **Ejemplo del profesor** [HH:MM:SS–HH:MM:SS]:
-   NO marques como ejemplo meras repeticiones teóricas. Conserva los datos tal cual los dio.
-4. **Consejos y advertencias**: Destaca trampas, buenas prácticas o errores en bloques individuales:
-   > ⚠️ **Consejos del profesor** [HH:MM:SS–HH:MM:SS]: [explicación]
-5. **PROHIBIDO INVENTAR CÓDIGO O SINTAXIS**: Si el profesor usa una herramienta visual (como Raptor, Scratch, diagramas de flujo) y NO escribe código textual, NO lo traduzcas a Python, JS ni otro lenguaje. Describe el procedimiento tal cual (símbolos, clics, campos 'Set'/'To'). No inventes operadores ni sintaxis (como ':=') que no aparezcan literalmente.
-6. **UN EJEMPLO = UN BLOQUE**: Cada ejemplo o consejo debe tener su propio bloque '📌' o '⚠️' individual con su timestamp específico y ajustado al momento exacto en que ocurre. No agrupes ideas distintas bajo rangos de tiempo inflados.
-7. **Sin relleno duplicado**: Prohibido repetir la misma idea como alternativas distintas en listas o pasos. Cada punto debe aportar un dato nuevo.
-8. **Glosario con definiciones reales**: Todo término técnico listado debe incluir una definición concisa basada en lo explicado, nunca el término suelto.
-9. **Sin índice textual**: NO incluyas un apartado de 'Índice' o 'Tabla de contenidos' en el texto Markdown; la plataforma de lectura lo genera automáticamente de forma interactiva.
+## 1. Lo Esencial
+(Resumen conciso del núcleo de la sesión, máximo 5 líneas).
+
+## 2. Conceptos Clave
+(Definición única de cada término relevante con su aplicación técnica).
+
+## 3. Procedimientos Paso a Paso
+(Secuencias operativas, comandos de terminal o código en bloques funcionales).
+
+## 4. Errores Comunes y Solución
+- **Síntoma**: ...
+  - *Causa*: ...
+  - *Solución*: ...
+
+## 5. Comparativas
+(Tabla Markdown contrastando herramientas, tecnologías o métodos tratados).
+
+## 6. Glosario
+(Definiciones de una sola línea de términos técnicos que hayan aparecido).
+
+## 7. Autoevaluación
+(Preguntas de repaso con su respuesta y explicación técnica inmediata).
+
+## 8. Pendiente de Revisar
+(Aspectos que quedaron dudosos o abiertos. Si no hay ninguno: "Sin puntos pendientes.").
 """
 
 
@@ -160,13 +176,19 @@ def dividir_transcripcion(texto: str, max_chars: int = 9000) -> list[str]:
 # ---------------------------------------------------------------------------
 def construir_prompt_bloque(fragmento: str, num_bloque: int, total_bloques: int) -> str:
     return f"""
-Transforma el siguiente fragmento ({num_bloque} de {total_bloques}) de clase técnica en apuntes rigurosos.
+Transforma el siguiente fragmento ({num_bloque} de {total_bloques}) de una clase técnica en apuntes parciales.
+Estos apuntes se fusionarán después con los del resto de fragmentos, así que usa la misma plantilla fija de 8 secciones obligatorias
+para que la consolidación sea directa. Incluye solo las secciones con contenido real en este fragmento.
+
+REGLAS NEGATIVAS ESTRICTAS:
+- PROHIBIDO incluir timestamps [HH:MM:SS] dentro del cuerpo de los apuntes.
+- PROHIBIDO incluir marcas como "(Verificar)" en el cuerpo (lo dudoso va exclusivamente a la sección "## 8. Pendiente de Revisar").
+- PROHIBIDO incluir comentarios meta ("Este documento es una unificación...", "A continuación se presentan...").
+- Prohibido inventar definiciones o código que no aparezca en la clase.
 
 {REGLAS_MAESTRAS}
 
-Al final de este fragmento, añade una sección:
-### Términos clave (Bloque {num_bloque})
-(Término: definición breve explicada por el profesor).
+{ESTRUCTURA_APUNTES}
 
 ---
 FRAGMENTO DE TRANSCRIPCIÓN:
@@ -176,15 +198,17 @@ FRAGMENTO DE TRANSCRIPCIÓN:
 
 def construir_prompt_clase_unica(transcripcion: str) -> str:
     return f"""
-Transforma la transcripción de esta clase técnica en un documento de estudio exhaustivo y profesional en Markdown.
+Convierte la transcripción de esta clase técnica en apuntes de estudio en Markdown respetando estrictamente la plantilla fija de 8 secciones.
+
+REGLAS NEGATIVAS ESTRICTAS:
+- PROHIBIDO incluir timestamps [HH:MM:SS] dentro del cuerpo de los apuntes.
+- PROHIBIDO incluir marcas como "(Verificar)" en el cuerpo (lo dudoso va exclusivamente a la sección "## 8. Pendiente de Revisar").
+- PROHIBIDO incluir comentarios meta ("Este documento es una unificación...", "A continuación se presentan...").
+- Prohibido inventar definiciones o código que no aparezca en la clase.
 
 {REGLAS_MAESTRAS}
 
-ESTRUCTURA OBLIGATORIA DEL DOCUMENTO:
-# 📖 Apuntes: [Título deducido de la clase]
-## 🧩 Desarrollo de Bloques Temáticos (con subtítulos ###, tablas y citas puntuales)
-## 🔑 Glosario de Términos Clave (con definiciones reales de una frase)
-## 🧠 Preguntas de Repaso (3 a 5 preguntas de evaluación basadas solo en la clase, con respuestas explicadas al final)
+{ESTRUCTURA_APUNTES}
 
 ---
 TRANSCRIPCIÓN COMPLETA:
@@ -207,15 +231,26 @@ def construir_prompt_unificacion(apuntes_por_bloque: list[str]) -> str | None:
         return None
 
     return f"""
-A continuación tienes los apuntes generados a partir de fragmentos consecutivos de UNA MISMA clase de DAW. 
-Únelos en un único documento definitivo y coherente.
+A continuación tienes los apuntes generados a partir de fragmentos consecutivos de UNA MISMA clase técnica de DAW.
+Consolídalos en un único documento definitivo respetando exactamente las 8 secciones de la plantilla fija obligatoria.
 
 REGLAS DE UNIFICACIÓN:
-1. Crea un Título representativo. NO incluyas un apartado de 'Índice' o 'Tabla de contenidos'; la plataforma de lectura lo genera automáticamente de forma interactiva.
-2. Une el desarrollo temático eliminando redundancias, pero MANTÉN INTACTOS todos los bloques '> 📌 **Ejemplo del profesor**' y '> ⚠️ **Consejos del profesor**' con sus timestamps exactos. Prohibido resumirlos o eliminarlos.
-3. Respeta la regla de NO inventar código textual si la herramienta era visual (Raptor, diagramas).
-4. Consolida un único '## 🔑 Glosario Unificado de Términos Clave' asegurando que cada término tenga su definición clara.
-5. Genera al final una sección '## 🧠 Preguntas de Repaso' (4-5 preguntas tipo test y cortas) con soluciones justificadas.
+1. Un solo título H1 (# {{titulo_tema}}) y una sola instancia de cada una de las 8 secciones en el orden establecido.
+2. PROHIBIDO incluir timestamps [HH:MM:SS] dentro del cuerpo de los apuntes.
+3. PROHIBIDO incluir marcas como "(Verificar)" en el cuerpo (lo dudoso va exclusivamente a la sección "## 8. Pendiente de Revisar"). Si no hay ningún aspecto pendiente o dudoso, escribe textualmente: "Sin puntos pendientes.".
+4. PROHIBIDO comentarios meta ("Este documento es una unificación...", "A continuación se presentan...").
+5. Prohibido inventar definiciones o código que no aparezca en la clase.
+6. En "## 4. Errores Comunes y Solución", mantén el formato:
+   - **Síntoma**: ...
+     - *Causa*: ...
+     - *Solución*: ...
+7. En "## 5. Comparativas", incluye la tabla Markdown contrastando herramientas, tecnologías o métodos tratados.
+8. En "## 6. Glosario", definiciones de una sola línea de términos técnicos que hayan aparecido, sin repetir Conceptos Clave.
+9. En "## 7. Autoevaluación", preguntas de repaso con su respuesta y explicación técnica inmediata.
+
+{REGLAS_MAESTRAS}
+
+{ESTRUCTURA_APUNTES}
 
 ---
 APUNTES A UNIFICAR:
@@ -260,12 +295,19 @@ def unificar_apuntes_jerarquico(apuntes_por_bloque: list[str]) -> str:
                 # Sintetizar la pareja (i, i+1)
                 pareja = bloques[i] + "\n\n---CONTINUACIÓN---\n\n" + bloques[i + 1]
                 prompt_fusion = (
-                    f"Fusiona estas dos secciones consecutivas de apuntes de DAW en un bloque coherente.\n"
-                    f"REGLAS:\n"
-                    f"- MANTÉN INTACTOS todos los bloques '> 📌 **Ejemplo del profesor**' y "
-                    f"'> ⚠️ **Consejos del profesor**' con sus timestamps exactos.\n"
-                    f"- Consolida el glosario eliminando duplicados.\n"
-                    f"- Elimina introducciones y conclusiones redundantes entre secciones.\n\n"
+                    f"Fusiona estos dos apuntes parciales consecutivos de una clase de DAW en uno solo.\n\n"
+                    f"{REGLAS_MAESTRAS}\n\n"
+                    f"REGLAS DE FUSIÓN:\n"
+                    f"- Respeta la estructura obligatoria de 8 secciones fijas (## 1. a ## 8.); cada sección aparece una sola vez.\n"
+                    f"- PROHIBIDO incluir timestamps [HH:MM:SS] dentro del cuerpo de los apuntes.\n"
+                    f"- PROHIBIDO incluir marcas como '(Verificar)' en el cuerpo (lo dudoso va exclusivamente a '## 8. Pendiente de Revisar').\n"
+                    f"- PROHIBIDO comentarios meta ('Este documento es una unificación...', etc.).\n"
+                    f"- Prohibido inventar definiciones o código que no aparezca en la clase.\n"
+                    f"- Si un concepto aparece en ambos apuntes, déjalo en una única entrada con el dato más completo.\n"
+                    f"- En '## 4. Errores Comunes y Solución', usa el formato Síntoma / Causa / Solución.\n"
+                    f"- En '## 6. Glosario', definiciones de una sola línea.\n"
+                    f"- En '## 8. Pendiente de Revisar', si no hay aspectos dudosos: 'Sin puntos pendientes.'.\n\n"
+                    f"{ESTRUCTURA_APUNTES}\n\n"
                     f"---\n{pareja}"
                 )
                 try:
@@ -304,7 +346,12 @@ def unificar_apuntes_jerarquico(apuntes_por_bloque: list[str]) -> str:
 # 4. Sección de preparación para examen (Mejora 3)
 # ---------------------------------------------------------------------------
 def generar_seccion_examen(contenido_apuntes: str) -> str:
-    """Genera una sección estructurada de preparación para examen a partir del documento final."""
+    """Genera una sección estructurada de preparación para examen a partir del documento final.
+
+    OBSOLETA: ya no se invoca desde generar_material_estudio(). Su "Chuleta técnica rápida"
+    duplicaba definiciones (contradice la Regla 1). Errores comunes y autoevaluación ya forman
+    parte de las secciones 5 y 6 de ESTRUCTURA_APUNTES.
+    """
     print("\n--- Generando sección '[EXAMEN] Preparación para Examen' ---")
 
     prompt_examen = f"""
@@ -388,27 +435,50 @@ def llamar_modelo_seguro(
 
 
 # ---------------------------------------------------------------------------
-# 4. Validación de timestamps
+# 4. Limpieza y validación previa al guardado
 # ---------------------------------------------------------------------------
+def limpiar_apuntes_previo_guardado(texto: str) -> str:
+    """Aplica filtros de limpieza previa al guardado en disco:
+    - Elimina marcas residuales tipo '(Verificar...)' o '(verificar...)'.
+    - Retira pies de página redundantes y líneas meta de cierre.
+    """
+    # 1. Filtro regex para eliminar marcas residuales tipo '(Verificar...)' o '(verificar...)'
+    texto = re.sub(r"\((?:Verificar|verificar)[^\)]*\)", "", texto)
+
+    # 2. Retirar pies de página redundantes y líneas meta
+    lineas = texto.splitlines()
+    lineas_limpias = []
+    for linea in lineas:
+        # Eliminar notas al pie redundantes tipo [^1]: ... o [^nota]: ...
+        if re.match(r"^\s*\[\^[^\]]+\]:\s*", linea):
+            continue
+        # Eliminar pies de página redundantes de generación o cierre
+        if re.search(
+            r"^\s*(?:---\s*)?(?:Documento generado|Fin de los apuntes|Apuntes generados automáticamente|Nota de unificación|Generado por)",
+            linea,
+            re.IGNORECASE,
+        ):
+            continue
+        lineas_limpias.append(linea)
+
+    texto_limpio = "\n".join(lineas_limpias)
+
+    # Normalizar espacios duplicados dejados por la eliminación de (Verificar...)
+    texto_limpio = re.sub(r"[ \t]{2,}", " ", texto_limpio)
+    # Evitar saltos de línea excesivos (> 2 consecutivos)
+    texto_limpio = re.sub(r"\n{3,}", "\n\n", texto_limpio).strip()
+
+    return texto_limpio
+
+
 def validar_timestamps(contenido: str) -> str:
-    lineas = contenido.split("\n")
-    marcadores = ("📌", "⚠️")
-    sin_timestamp = []
+    hay_reloj = bool(re.search(r"🕒\s*\[\d{2}:\d{2}:\d{2}", contenido))
+    hay_timestamps = bool(re.search(r"\[\d{2}:\d{2}:\d{2}\]", contenido))
 
-    for i, linea in enumerate(lineas, start=1):
-        if any(m in linea for m in marcadores):
-            linea_strip = linea.strip()
-            # [M-5] Ignorar bullets de prefacio: el timestamp real está en la línea siguiente (bloque >)
-            es_bullet_prefacio = linea_strip.startswith(("-", "*"))
-            if not es_bullet_prefacio and not re.search(r"\[\d{2}:\d{2}:\d{2}", linea):
-                sin_timestamp.append((i, linea_strip))
-
-    if sin_timestamp:
-        print(f"\n[AVISO] {len(sin_timestamp)} bloque(s) sin timestamp detectado(s):")
-        for num_linea, texto in sin_timestamp[:5]:
-            print(f"   - Línea {num_linea}: {texto[:70]}...")
+    if hay_reloj or hay_timestamps:
+        print("\n[AVISO] Se detectaron timestamps residuales en el documento (deben omitirse según las reglas).")
     else:
-        print("\n[OK] Validación sintáctica: todas las citas incluyen marca de tiempo.")
+        print("\n[OK] Documento verificado sin timestamps en el cuerpo.")
 
     return contenido
 
@@ -418,7 +488,15 @@ def validar_timestamps(contenido: str) -> str:
 # ---------------------------------------------------------------------------
 def auditar_apuntes(texto_transcripcion: str, apuntes_generados: str, ruta_auditoria: str = "auditoria.md"):
     print("\n--- Ejecutando auditoría de discrepancias y fidelidad técnica ---")
-    
+
+    hay_reloj = bool(re.search(r"🕒\s*\[\d{2}:\d{2}:\d{2}", apuntes_generados))
+    hay_timestamps = bool(re.search(r"\[\d{2}:\d{2}:\d{2}\]", apuntes_generados))
+
+    if hay_reloj or hay_timestamps:
+        print("[AVISO AUDITORÍA] Se detectaron timestamps en los apuntes (deben omitirse según las reglas).")
+    else:
+        print("[OK AUDITORÍA] Apuntes libres de marcas de tiempo en el cuerpo.")
+
     prompt_auditoria = f"""
 Aquí tienes la transcripción ORIGINAL de la clase y unos apuntes generados a partir de ella.
 Compara ambos minuciosamente y señala CUALQUIER afirmación, sintaxis de código, operador (ej. :=, let, var),
@@ -427,7 +505,9 @@ símbolo o dato concreto en los apuntes que NO aparezca de forma explícita o eq
 REGLAS DE REVISIÓN:
 - Marca cada problema con "🚩 DISCREPANCIA TÉCNICA: [línea o sección]" seguido de una justificación breve.
 - Presta especial atención a si se inventó código escrito cuando el profesor usaba herramientas visuales (como diagramas de flujo o Raptor).
-- Revisa si hay timestamps con rangos de tiempo inventados.
+- Revisa que NO se hayan incluido timestamps [HH:MM:SS] dentro del cuerpo de los apuntes.
+- Revisa que no haya marcas como "(Verificar)" en el cuerpo (lo dudoso va exclusivamente a "## 8. Pendiente de Revisar").
+- Revisa que no haya comentarios meta ("Este documento es una unificación...", etc.).
 - Si no encuentras inconsistencias o datos inventados, responde únicamente: "✅ Sin discrepancias detectadas. El documento es 100% fiel a la transcripción."
 - No intentes reescribir ni corregir el documento; limítate a emitir el informe de auditoría.
 
@@ -671,13 +751,14 @@ def generar_material_estudio(
             # [Mejora 2] Tree-Reduce jerárquico: maneja clases de hasta 2 h sin fallback plano
             contenido_final = unificar_apuntes_jerarquico(apuntes_por_bloque)
 
+        # Limpieza previa al guardado: eliminar marcas residuales tipo (Verificar...) y pies de página redundantes
+        contenido_final = limpiar_apuntes_previo_guardado(contenido_final)
+
         # Validación sintáctica en consola
         contenido_final = validar_timestamps(contenido_final)
 
-        # [Mejora 3] Sección de preparación para examen
-        seccion_examen = generar_seccion_examen(contenido_final)
-        if seccion_examen:
-            contenido_final = contenido_final.rstrip() + "\n\n" + seccion_examen
+        # La sección de examen (generar_seccion_examen) se ha retirado: duplicaba
+        # definiciones y ya está cubierta por las secciones 5 y 6 de la estructura.
 
         # Salvaguarda contra sobreescritura silenciosa (I-7)
         if os.path.exists(ruta_salida):
@@ -686,7 +767,7 @@ def generar_material_estudio(
             shutil.copy2(ruta_salida, ruta_bak)
             print(f"📦 Backup preventivo creado: '{ruta_bak}'")
 
-        # Cabecera y pie con formato estrictamente académico
+        # Cabecera con formato estrictamente académico (pie de página retirado)
         p_salida = Path(ruta_salida).resolve()
         materia_acad = "DAW"
         if len(p_salida.parts) >= 3 and p_salida.parts[-3] == "clases":
@@ -696,12 +777,9 @@ def generar_material_estudio(
 
         fecha_acad = datetime.now().strftime("%d/%m/%Y")
         cabecera_acad = f"> 🏛️ **Registro de clase** • {materia_acad} • {fecha_acad}\n\n"
-        pie_acad = f"\n\n---\n\n*Registro de clase • {materia_acad} • {fecha_acad}*\n"
 
         if not contenido_final.startswith("> 🏛️ **Registro de clase**"):
             contenido_final = cabecera_acad + contenido_final.lstrip()
-        if not contenido_final.strip().endswith(f"Registro de clase • {materia_acad} • {fecha_acad}*"):
-            contenido_final = contenido_final.rstrip() + pie_acad
 
         # Guardado del resultado final
         with open(ruta_salida, "w", encoding="utf-8") as f:

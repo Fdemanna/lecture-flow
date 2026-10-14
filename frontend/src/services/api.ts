@@ -52,6 +52,92 @@ export interface ApiResponse {
 
 const API_BASE_URL = '/api'
 
+export class ApiError extends Error {
+  status: number
+  statusText: string
+  data?: any
+
+  constructor(message: string, status: number, statusText: string, data?: any) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.statusText = statusText
+    this.data = data
+    Object.setPrototypeOf(this, ApiError.prototype)
+  }
+}
+
+/**
+ * Formatea el campo detail devuelto por FastAPI (puede ser string, objeto o array de validaciones).
+ * Garantiza texto limpio y nunca [object Object].
+ */
+export function formatApiErrorDetail(detail: any): string {
+  if (!detail) return ''
+  if (typeof detail === 'string') return detail
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object') {
+          const loc = Array.isArray(item.loc)
+            ? item.loc.filter((l: any) => l !== 'body').join('.')
+            : item.loc
+          const msg = item.msg || item.message || JSON.stringify(item)
+          return loc ? `${loc}: ${msg}` : msg
+        }
+        return String(item)
+      })
+      .filter(Boolean)
+      .join('; ')
+  }
+
+  if (typeof detail === 'object') {
+    if (detail.message && typeof detail.message === 'string') {
+      return detail.message
+    }
+    if (detail.msg && typeof detail.msg === 'string') {
+      return detail.msg
+    }
+    if (detail.error && typeof detail.error === 'string') {
+      return detail.error
+    }
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return String(detail)
+    }
+  }
+
+  return String(detail)
+}
+
+/**
+ * Extrae un mensaje de error legible a partir de la respuesta HTTP.
+ */
+export function extractErrorMessage(
+  status: number,
+  statusText: string,
+  data?: any
+): string {
+  if (status === 409) {
+    return '⚠️ Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
+  }
+
+  if (data) {
+    const rawDetail = data.detail ?? data.message ?? data.error
+    if (rawDetail !== undefined && rawDetail !== null) {
+      const formatted = formatApiErrorDetail(rawDetail)
+      if (formatted) return formatted
+    }
+    if (typeof data === 'string' && data.trim()) {
+      return data
+    }
+  }
+
+  return `Error en llamada API: ${status} ${statusText}`
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
@@ -62,16 +148,16 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    let errorMsg = `Error en llamada API ${endpoint}: ${response.status} ${response.statusText}`
+    let errData: any = null
     try {
-      const errData = await response.json()
-      if (errData && errData.detail) {
-        errorMsg = errData.detail
-      }
+      errData = await response.json()
     } catch {
-      // ignore json parse error
+      try {
+        errData = await response.text()
+      } catch {}
     }
-    throw new Error(errorMsg)
+    const errorMsg = extractErrorMessage(response.status, response.statusText, errData)
+    throw new ApiError(errorMsg, response.status, response.statusText, errData)
   }
 
   return response.json() as Promise<T>
@@ -240,16 +326,16 @@ export async function startJob(
   })
 
   if (!response.ok) {
-    let errorDetail = `Error al iniciar el procesamiento (${response.status})`
+    let errData: any = null
     try {
-      const resJson = await response.json()
-      if (resJson?.detail?.message) {
-        errorDetail = resJson.detail.message
-      } else if (typeof resJson?.detail === 'string') {
-        errorDetail = resJson.detail
-      }
-    } catch {}
-    throw new Error(errorDetail)
+      errData = await response.json()
+    } catch {
+      try {
+        errData = await response.text()
+      } catch {}
+    }
+    const errorMsg = extractErrorMessage(response.status, response.statusText, errData)
+    throw new ApiError(errorMsg, response.status, response.statusText, errData)
   }
 
   return response.json()
@@ -287,6 +373,18 @@ export function subscribeToJobEvents(
   return () => {
     eventSource.close()
   }
+}
+
+export async function regenerateNotes(
+  subject: string,
+  className: string
+): Promise<{ job_id: string; status: string }> {
+  return request<{ job_id: string; status: string }>(
+    `/classes/${encodeURIComponent(subject)}/${encodeURIComponent(className)}/regenerate`,
+    {
+      method: 'POST',
+    }
+  )
 }
 
 

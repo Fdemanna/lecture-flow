@@ -322,6 +322,147 @@ class JobManager:
 
         return False
 
+    def iniciar_regeneracion(
+        self,
+        materia: str,
+        clase: str,
+    ) -> Dict[str, Any]:
+        """Inicia la regeneración de apuntes a partir de transcripcion.txt en un hilo secundario con SSE."""
+        with self._lock:
+            if self._active_job and self._active_job.get("status") == "running":
+                raise RuntimeError(
+                    f"Ya existe una tarea activa: {self._active_job.get('materia')} / {self._active_job.get('tema')}"
+                )
+
+            if RUTA_LOCK.exists():
+                raise RuntimeError("El archivo de bloqueo data/.procesando.lock ya está activo.")
+
+            from src.orchestrator import CARPETA_BASE, normalizar_nombre, es_ruta_segura
+            directorio = CARPETA_BASE / normalizar_nombre(materia) / normalizar_nombre(clase)
+            if not es_ruta_segura(directorio):
+                raise ValueError(f"Ruta no permitida: {directorio}")
+
+            ruta_trans = directorio / "transcripcion.txt"
+            if not ruta_trans.exists():
+                raise ValueError("No existe transcripcion.txt para esta clase")
+
+            job_id = uuid.uuid4().hex[:10]
+
+            RUTA_LOCK.parent.mkdir(parents=True, exist_ok=True)
+            RUTA_LOCK.write_text(f"{materia} / {clase} (Regeneración)", encoding="utf-8")
+
+            job_data: Dict[str, Any] = {
+                "job_id": job_id,
+                "materia": materia,
+                "tema": clase,
+                "tipo_origen": "regeneracion",
+                "status": "running",
+                "phase": "iniciando",
+                "progress": 5,
+                "message": f"Iniciando regeneración de apuntes para '{clase}'...",
+                "created_at": datetime.datetime.now().isoformat(),
+                "completed_at": None,
+                "error": None,
+            }
+
+            self._active_job = job_data
+            self._subscribers[job_id] = set()
+
+            self._worker_thread = threading.Thread(
+                target=self._ejecutar_regeneracion_hilo,
+                args=(job_id, materia, clase),
+                daemon=True,
+                name=f"RegenWorker-{job_id}",
+            )
+            self._worker_thread.start()
+
+            return {
+                "job_id": job_id,
+                "status": "started",
+                "materia": materia,
+                "clase": clase,
+                "message": "Regeneración iniciada con éxito.",
+            }
+
+    def _ejecutar_regeneracion_hilo(
+        self,
+        job_id: str,
+        materia: str,
+        clase: str,
+    ) -> None:
+        """Ejecuta la regeneración de apuntes en segundo plano emitiendo eventos SSE."""
+        def callback_progreso(fase: str, progreso: int, mensaje: str) -> None:
+            with self._lock:
+                if self._active_job and self._active_job.get("job_id") == job_id:
+                    self._active_job["phase"] = fase
+                    self._active_job["progress"] = progreso
+                    self._active_job["message"] = mensaje
+
+            self._broadcast(job_id, {
+                "job_id": job_id,
+                "status": "running",
+                "phase": fase,
+                "progress": progreso,
+                "message": mensaje,
+            })
+
+        try:
+            from src.orchestrator import regenerar_apuntes_clase
+            resultado = regenerar_apuntes_clase(
+                materia=materia,
+                clase=clase,
+                callback_progreso=callback_progreso,
+            )
+
+            with self._lock:
+                if self._active_job and self._active_job.get("job_id") == job_id:
+                    self._active_job["status"] = "completed"
+                    self._active_job["phase"] = "completado"
+                    self._active_job["progress"] = 100
+                    self._active_job["message"] = "Apuntes y preguntas regenerados con éxito."
+                    self._active_job["completed_at"] = datetime.datetime.now().isoformat()
+                    self._active_job["resultado"] = resultado
+                    self._job_history[job_id] = dict(self._active_job)
+
+            self._broadcast(job_id, {
+                "job_id": job_id,
+                "status": "completed",
+                "phase": "completado",
+                "progress": 100,
+                "message": "Apuntes y preguntas regenerados con éxito.",
+            })
+
+        except Exception as exc:
+            logger.error("Fallo durante la regeneración del job %s: %s", job_id, exc, exc_info=True)
+            with self._lock:
+                if self._active_job and self._active_job.get("job_id") == job_id:
+                    self._active_job["status"] = "failed"
+                    self._active_job["phase"] = "error"
+                    self._active_job["error"] = str(exc)
+                    self._active_job["message"] = f"Error en regeneración: {exc}"
+                    self._active_job["completed_at"] = datetime.datetime.now().isoformat()
+                    self._job_history[job_id] = dict(self._active_job)
+
+            self._broadcast(job_id, {
+                "job_id": job_id,
+                "status": "failed",
+                "phase": "error",
+                "progress": self._active_job.get("progress", 0) if self._active_job else 0,
+                "message": f"Error: {exc}",
+                "error": str(exc),
+            })
+
+        finally:
+            try:
+                RUTA_LOCK.unlink(missing_ok=True)
+            except Exception as e:
+                logger.warning("Fallo al eliminar lockfile tras finalizar regeneración: %s", e)
+
+            with self._lock:
+                if self._active_job and self._active_job.get("job_id") == job_id:
+                    self._active_job = None
+
 
 # Singleton global
 job_manager = JobManager()
+

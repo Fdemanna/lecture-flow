@@ -127,6 +127,9 @@ export function Sidebar({
         display: 'flex',
         flexDirection: 'column',
         height: 'calc(100vh - 73px)',
+        maxHeight: 'calc(100vh - 73px)',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
         position: 'sticky',
         top: '73px',
       }}
@@ -228,8 +231,10 @@ export function Sidebar({
 
       {/* Lista Desplazable de Asignaturas y Temas */}
       <div
+        className="sidebar-scrollable"
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           padding: '12px 10px',
           display: 'flex',

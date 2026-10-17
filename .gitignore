@@ -50,3 +50,7 @@ Thumbs.db
 # Caché de pytest
 .pytest_cache/
 
+# Agentes de IA y configuración local de skills
+.agent/
+.agents/
+skills-lock.json

@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   HelpCircle,
   ArrowRight,
+  Menu,
 } from 'lucide-react'
 import {
   getHealth,
@@ -37,10 +38,13 @@ export default function App() {
   // Estado para panel de procesamiento / ingesta
   const [showProcessingPanel, setShowProcessingPanel] = useState<boolean>(false)
 
-  // Estado para sesión interactiva de Active Recall (SM-2 Lite)
+  // Estado para sesion interactiva de Active Recall (SM-2 Lite)
   const [showPracticeSession, setShowPracticeSession] = useState<boolean>(false)
 
-  // Selección de clase activa
+  // Estado para drawer responsivo del explorador de clases en movil/tablet
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false)
+
+  // Seleccion de clase activa
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null)
   const [selectedClass, setSelectedClass] = useState<string | null>(null)
 
@@ -93,193 +97,113 @@ export default function App() {
   const activeClassData = activeSubjectData?.clases.find((c) => c.id === selectedClass)
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f131d', color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-      {/* Top Navigation Bar */}
-      <header
-        style={{
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-          backgroundColor: '#121622',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        <div
-          style={{
-            maxWidth: '1440px',
-            margin: '0 auto',
-            padding: '16px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          {/* Logo y Branding */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(128, 131, 255, 0.15)',
-                border: '1px solid rgba(128, 131, 255, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#8083ff',
-              }}
+    <div className="min-h-screen bg-[#0b0e14] text-slate-100 flex flex-col font-sans">
+      {/* Top Navigation Bar pegado a los extremos */}
+      <header className="sticky top-0 z-50 border-b border-white/5 bg-[#10141f]/90 backdrop-blur w-full h-16 flex items-center">
+        <div className="w-full px-4 sm:px-6 flex items-center justify-between gap-3 sm:gap-4">
+          {/* Botón menú móvil y Branding */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              onClick={() => setIsMobileSidebarOpen((prev) => !prev)}
+              className="lg:hidden p-1.5 sm:p-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white transition-colors shrink-0 cursor-pointer"
+              aria-label={isMobileSidebarOpen ? 'Cerrar panel de clases' : 'Abrir explorador de clases'}
             >
-              <GraduationCap size={24} />
+              <Menu size={18} />
+            </button>
+
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-indigo-400 shrink-0">
+              <GraduationCap size={20} className="sm:hidden" />
+              <GraduationCap size={22} className="hidden sm:block" />
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em', color: '#f8fafc' }}>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-sm sm:text-base font-bold tracking-tight text-white shrink-0">
                   LectureFlow
                 </span>
-                <span
-                  style={{
-                    fontSize: '0.7rem',
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
-                    backgroundColor: 'rgba(128, 131, 255, 0.15)',
-                    color: '#c0c1ff',
-                    border: '1px solid rgba(128, 131, 255, 0.25)',
-                    fontWeight: 600,
-                  }}
-                >
+                <span className="hidden xs:inline-block text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 font-semibold shrink-0">
                   DAW Suite
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
-                Asistente de Estudio y Síntesis Académica
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate hidden xs:block">
+                Asistente de estudio y sintesis academica
               </p>
             </div>
           </div>
 
           {/* Estado de Salud y Controles */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {/* Badge de Conexión Backend */}
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Badge de Conexion Backend */}
             <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 14px',
-                borderRadius: '9999px',
-                backgroundColor: health ? 'rgba(78, 222, 163, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                border: `1px solid ${health ? 'rgba(78, 222, 163, 0.25)' : 'rgba(239, 68, 68, 0.3)'}`,
-                fontSize: '0.82rem',
-                fontWeight: 500,
-              }}
+              className={`hidden md:inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${
+                health
+                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                  : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
+              }`}
             >
               <span
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: health ? '#4edea3' : '#ef4444',
-                  boxShadow: health ? '0 0 8px rgba(78, 222, 163, 0.6)' : 'none',
-                }}
+                className={`w-2 h-2 rounded-full ${
+                  health ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-rose-500'
+                }`}
               />
-              <span style={{ color: health ? '#4edea3' : '#f87171' }}>
-                {health ? 'Backend Online (:8000)' : 'Backend Desconectado'}
-              </span>
+              <span>{health ? 'Backend en linea (:8000)' : 'Backend desconectado'}</span>
             </div>
 
             {/* Lockfile en progreso si existe */}
             {health?.procesando && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '9999px',
-                  backgroundColor: 'rgba(251, 146, 60, 0.15)',
-                  border: '1px solid rgba(251, 146, 60, 0.3)',
-                  color: '#fb923c',
-                  fontSize: '0.78rem',
-                }}
-              >
-                <Sparkles size={14} />
-                <span>Procesando: {health.clase_en_proceso}</span>
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs truncate max-w-[180px]">
+                <Sparkles size={13} className="shrink-0" />
+                <span className="truncate">{health.clase_en_proceso}</span>
               </div>
             )}
 
-            {/* Botón Práctica Diaria */}
+            {/* Boton Practica Diaria */}
             <button
               onClick={() => setShowPracticeSession((prev) => !prev)}
-              style={{
-                backgroundColor: showPracticeSession ? 'rgba(251, 146, 60, 0.25)' : 'rgba(251, 146, 60, 0.15)',
-                border: '1px solid rgba(251, 146, 60, 0.35)',
-                color: '#fb923c',
-                borderRadius: '8px',
-                padding: '7px 14px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.2s',
-                boxShadow: showPracticeSession ? 'none' : '0 2px 10px rgba(251, 146, 60, 0.2)',
-              }}
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-colors shrink-0 cursor-pointer ${
+                showPracticeSession
+                  ? 'bg-amber-500/25 border-amber-500/40 text-amber-300'
+                  : 'bg-amber-500/15 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+              }`}
+              aria-label={showPracticeSession ? 'Cerrar practica' : 'Practica diaria (SM-2)'}
             >
-              <Flame size={15} />
-              <span>{showPracticeSession ? 'Cerrar Práctica' : '🔥 Práctica Diaria (SM-2)'}</span>
+              <Flame size={14} className="shrink-0" />
+              <span className="hidden sm:inline">{showPracticeSession ? 'Cerrar practica' : 'Practica diaria (SM-2)'}</span>
+              <span className="sm:hidden">{showPracticeSession ? 'Cerrar' : 'Practica'}</span>
             </button>
 
-            {/* Botón Nuevo Procesamiento */}
+            {/* Boton Nuevo Procesamiento */}
             <button
               onClick={() => setShowProcessingPanel((prev) => !prev)}
-              style={{
-                backgroundColor: showProcessingPanel ? 'rgba(128, 131, 255, 0.25)' : '#8083ff',
-                border: showProcessingPanel ? '1px solid rgba(128, 131, 255, 0.4)' : 'none',
-                color: '#ffffff',
-                borderRadius: '8px',
-                padding: '7px 14px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: showProcessingPanel ? 'none' : '0 2px 10px rgba(128, 131, 255, 0.3)',
-                transition: 'all 0.2s',
-              }}
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer ${
+                showProcessingPanel
+                  ? 'bg-indigo-500/20 border border-indigo-500/40 text-indigo-300'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20'
+              }`}
+              aria-label={showProcessingPanel ? 'Ocultar ingesta' : 'Procesar clase'}
             >
-              <Sparkles size={14} />
-              <span>{showProcessingPanel ? 'Ocultar Ingesta' : '➕ Procesar Clase'}</span>
+              <Sparkles size={14} className="shrink-0" />
+              <span className="hidden sm:inline">{showProcessingPanel ? 'Ocultar ingesta' : 'Procesar clase'}</span>
+              <span className="sm:hidden">{showProcessingPanel ? 'Ocultar' : 'Procesar'}</span>
             </button>
 
-            {/* Botón Refrescar */}
+            {/* Boton Refrescar */}
             <button
               onClick={() => cargarDatos(true)}
               disabled={refreshing}
               title="Recargar datos del servidor"
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                color: '#94a3b8',
-                padding: '8px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s',
-              }}
+              aria-label="Recargar datos del servidor"
+              className="p-1.5 sm:p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-slate-200 transition-colors shrink-0 cursor-pointer"
             >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={`sm:hidden ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw size={15} className={`hidden sm:block ${refreshing ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Layout Principal: Sidebar + Contenido Central */}
-      <div style={{ display: 'flex', flex: 1, maxWidth: '1440px', width: '100%', margin: '0 auto' }}>
-        {/* Sidebar con Acordeón y Gestión (Renombrar / Eliminar) */}
+      {/* Layout Principal: Sidebar pegado al borde izquierdo absoluto + Contenido Central fluido */}
+      <div className="w-full flex-1 flex flex-col lg:grid lg:grid-cols-[280px_1fr] relative">
+        {/* Sidebar con Acordeon pegado al tope izquierdo */}
         <Sidebar
           classes={classes}
           selectedSubject={selectedSubject}
@@ -288,13 +212,15 @@ export default function App() {
           onRefresh={() => cargarDatos(true)}
           onNewProcessing={() => setShowProcessingPanel(true)}
           onOpenPractice={() => setShowPracticeSession(true)}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
-        {/* Área Central de Contenido */}
-        <main style={{ flex: 1, padding: '32px 36px', overflowY: 'auto' }}>
-          {/* Módulo de Práctica Interactiva (Active Recall SM-2 Lite) */}
+        {/* Area Central de Contenido Adaptable */}
+        <main className="min-w-0 p-6 lg:p-8 overflow-y-auto w-full">
+          {/* Modulo de Practica Interactiva (Active Recall SM-2 Lite) */}
           {showPracticeSession && (
-            <div style={{ marginBottom: '32px' }}>
+            <div className="mb-8">
               <PracticeSession
                 onSessionCompleted={() => {
                   cargarDatos(true)
@@ -313,38 +239,17 @@ export default function App() {
               onClose={() => setShowProcessingPanel(false)}
             />
           )}
-          {/* Banner de Error si el backend está caído */}
+
+          {/* Banner de Error si el backend esta caido */}
           {error && (
-            <div
-              style={{
-                marginBottom: '24px',
-                padding: '16px 20px',
-                borderRadius: '12px',
-                backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: '#fca5a5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <AlertCircle size={20} color="#ef4444" />
-                <span style={{ fontSize: '0.9rem' }}>{error}</span>
+            <div role="alert" aria-live="assertive" className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle size={18} className="text-rose-400 shrink-0" aria-hidden="true" />
+                <span className="text-sm">{error}</span>
               </div>
               <button
                 onClick={() => cargarDatos()}
-                style={{
-                  backgroundColor: '#ef4444',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors shrink-0"
               >
                 Reintentar
               </button>
@@ -353,7 +258,7 @@ export default function App() {
 
           {/* Visor y Editor de Apuntes si hay clase seleccionada */}
           {activeClassData && activeSubjectData && (
-            <div style={{ marginBottom: '32px' }}>
+            <div className="mb-8">
               <NotesEditor
                 subject={activeSubjectData.materia}
                 subjectName={activeSubjectData.materia_nombre}
@@ -367,400 +272,188 @@ export default function App() {
             </div>
           )}
 
-          {/* 1. Widgets de Estadísticas y Gamificación */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '16px',
-              marginBottom: '32px',
-            }}
-          >
+          {/* 1. Widgets de Estadisticas y Gamificacion */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
             {/* Card Racha */}
-            <div
+            <button
+              type="button"
               onClick={() => setShowPracticeSession(true)}
-              title="Haz clic para iniciar la Práctica Diaria"
-              style={{
-                backgroundColor: '#171b26',
-                border: '1px solid rgba(251, 146, 60, 0.25)',
-                borderRadius: '16px',
-                padding: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(251, 146, 60, 0.5)'
-                e.currentTarget.style.backgroundColor = 'rgba(251, 146, 60, 0.05)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(251, 146, 60, 0.25)'
-                e.currentTarget.style.backgroundColor = '#171b26'
-              }}
+              title="Haz clic para iniciar la practica diaria"
+              aria-label={`Racha diaria: ${racha} ${racha === 1 ? 'día' : 'días'}. Haz clic para iniciar la práctica`}
+              className="text-left bg-[#141824] border border-amber-500/20 hover:border-amber-500/40 rounded-2xl p-5 flex items-center gap-4 cursor-pointer transition-colors hover:bg-[#181d2c]"
             >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(251, 146, 60, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fb923c',
-                }}
-              >
-                <Flame size={26} />
+              <div className="w-12 h-12 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400 shrink-0">
+                <Flame size={24} aria-hidden="true" />
               </div>
               <div>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>Racha Diaria</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fb923c', lineHeight: 1.2 }}>
-                  {racha} {racha === 1 ? 'Día' : 'Días'}
+                <div className="text-xs text-slate-400 font-medium">Racha diaria</div>
+                <div className="text-2xl font-bold text-amber-400 leading-tight tabular-nums">
+                  {racha} {racha === 1 ? 'dia' : 'dias'}
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                  {stats?.ultimo_dia_estudiado ? `Último: ${stats.ultimo_dia_estudiado}` : 'Sin repasos'}
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {stats?.ultimo_dia_estudiado ? `Ultimo: ${stats.ultimo_dia_estudiado}` : 'Sin repasos previos'}
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Card XP */}
-            <div
+            <button
+              type="button"
               onClick={() => setShowPracticeSession(true)}
-              title="Haz clic para iniciar la Práctica Diaria"
-              style={{
-                backgroundColor: '#171b26',
-                border: '1px solid rgba(78, 222, 163, 0.25)',
-                borderRadius: '16px',
-                padding: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(78, 222, 163, 0.5)'
-                e.currentTarget.style.backgroundColor = 'rgba(78, 222, 163, 0.05)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(78, 222, 163, 0.25)'
-                e.currentTarget.style.backgroundColor = '#171b26'
-              }}
+              title="Haz clic para iniciar la practica diaria"
+              aria-label={`Experiencia: ${xp} XP. Haz clic para iniciar la práctica`}
+              className="text-left bg-[#141824] border border-emerald-500/20 hover:border-emerald-500/40 rounded-2xl p-5 flex items-center gap-4 cursor-pointer transition-colors hover:bg-[#181d2c]"
             >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(78, 222, 163, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#4edea3',
-                }}
-              >
-                <Zap size={26} />
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 shrink-0">
+                <Zap size={24} aria-hidden="true" />
               </div>
               <div>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>Experiencia</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#4edea3', lineHeight: 1.2 }}>
-                  ⚡ {xp} XP
+                <div className="text-xs text-slate-400 font-medium">Experiencia</div>
+                <div className="text-2xl font-bold text-emerald-400 leading-tight tabular-nums">
+                  {xp} XP
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                <div className="text-[11px] text-slate-500 mt-0.5">
                   +10 XP por acierto
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Card SM-2 Preguntas */}
-            <div
+            <button
+              type="button"
               onClick={() => setShowPracticeSession(true)}
-              title="Haz clic para iniciar la Práctica Diaria"
-              style={{
-                backgroundColor: '#171b26',
-                border: '1px solid rgba(128, 131, 255, 0.25)',
-                borderRadius: '16px',
-                padding: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(128, 131, 255, 0.5)'
-                e.currentTarget.style.backgroundColor = 'rgba(128, 131, 255, 0.05)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(128, 131, 255, 0.25)'
-                e.currentTarget.style.backgroundColor = '#171b26'
-              }}
+              title="Haz clic para iniciar la practica diaria"
+              aria-label={`Preguntas SM-2: ${totalPreguntas} items. Haz clic para iniciar la práctica`}
+              className="text-left bg-[#141824] border border-indigo-500/20 hover:border-indigo-500/40 rounded-2xl p-5 flex items-center gap-4 cursor-pointer transition-colors hover:bg-[#181d2c]"
             >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(128, 131, 255, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#8083ff',
-                }}
-              >
-                <Sparkles size={26} />
+              <div className="w-12 h-12 rounded-xl bg-indigo-500/15 flex items-center justify-center text-indigo-400 shrink-0">
+                <Sparkles size={24} aria-hidden="true" />
               </div>
               <div>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>Preguntas SM-2</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#c0c1ff', lineHeight: 1.2 }}>
-                  {totalPreguntas} ítems
+                <div className="text-xs text-slate-400 font-medium">Preguntas SM-2</div>
+                <div className="text-2xl font-bold text-indigo-300 leading-tight tabular-nums">
+                  {totalPreguntas} items
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                  Repetición espaciada
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Repeticion espaciada
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Card Clases */}
-            <div
-              style={{
-                backgroundColor: '#171b26',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '16px',
-                padding: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-              }}
-            >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#f8fafc',
-                }}
-              >
-                <BookOpen size={26} />
+            <div className="bg-[#141824] border border-white/5 rounded-2xl p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-slate-200 shrink-0">
+                <BookOpen size={24} />
               </div>
               <div>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>Total Clases</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f8fafc', lineHeight: 1.2 }}>
+                <div className="text-xs text-slate-400 font-medium">Total de clases</div>
+                <div className="text-2xl font-bold text-slate-100 leading-tight tabular-nums">
                   {totalClases}
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                <div className="text-[11px] text-slate-500 mt-0.5">
                   En {classes.length} asignaturas
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 2. Sección Principal: Catálogo de Asignaturas */}
+          {/* 2. Seccion Principal: Catalogo de Asignaturas */}
           <section>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '20px',
-              }}
-            >
+            <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, color: '#f8fafc' }}>
-                  Catálogo General de Asignaturas
+                <h2 className="text-lg font-bold text-slate-100 text-balance">
+                  Catalogo general de asignaturas
                 </h2>
-                <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
-                  Usa el menú lateral para explorar temas o administrar materias existentes (renombrar/eliminar).
+                <p className="text-xs text-slate-400 mt-0.5 text-pretty">
+                  Usa el menu lateral para explorar temas o administrar materias existentes (renombrar o eliminar).
                 </p>
               </div>
             </div>
 
             {loading ? (
-              <div
-                style={{
-                  textAlign: 'center',
-                  padding: '48px 0',
-                  color: '#94a3b8',
-                  backgroundColor: '#171b26',
-                  borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                }}
-              >
-                <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
-                <p style={{ margin: 0 }}>Cargando catálogo desde FastAPI...</p>
+              <div className="text-center py-12 text-slate-400 bg-[#141824] rounded-2xl border border-white/5">
+                <RefreshCw size={22} className="animate-spin mx-auto mb-3" />
+                <p className="text-xs">Cargando catalogo desde FastAPI…</p>
               </div>
             ) : classes.length === 0 ? (
-              <div
-                style={{
-                  textAlign: 'center',
-                  padding: '48px 24px',
-                  backgroundColor: '#171b26',
-                  borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                  color: '#94a3b8',
-                }}
-              >
-                <Folder size={40} style={{ margin: '0 auto 12px', color: '#64748b' }} />
-                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.1rem' }}>No hay asignaturas registradas</h3>
-                <p style={{ margin: '6px 0 0', fontSize: '0.85rem' }}>
-                  Procesa una nueva clase desde Streamlit para comenzar.
+              <div className="text-center py-12 px-6 bg-[#141824] rounded-2xl border border-white/5 text-slate-400">
+                <Folder size={36} className="mx-auto mb-3 text-slate-500" />
+                <h3 className="text-sm font-semibold text-slate-200 text-balance">No hay asignaturas registradas</h3>
+                <p className="text-xs mt-1 text-pretty">
+                  Procesa una nueva clase desde el panel superior para comenzar.
                 </p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {classes.map((subject) => (
                   <div
                     key={subject.materia}
-                    style={{
-                      backgroundColor: '#171b26',
-                      borderRadius: '16px',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      padding: '20px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '16px',
-                      transition: 'border-color 0.2s',
-                    }}
+                    className="bg-[#141824] rounded-2xl border border-white/5 p-6 flex flex-col justify-between h-full hover:border-white/10 transition-colors shadow-sm"
                   >
                     {/* Encabezado de la Materia */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                        paddingBottom: '12px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div
-                          style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '8px',
-                            backgroundColor: 'rgba(128, 131, 255, 0.12)',
-                            color: '#8083ff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
+                    <div className="flex items-center justify-between border-b border-white/5 pb-4 gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0">
                           <Folder size={20} />
                         </div>
-                        <div>
-                          <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#f8fafc' }}>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base font-bold text-slate-100 truncate text-pretty" title={subject.materia_nombre}>
                             {subject.materia_nombre}
                           </h3>
-                          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                          <span className="text-xs text-slate-500 truncate block mt-0.5" title={`Carpeta: ${subject.materia}`}>
                             Carpeta: {subject.materia}
                           </span>
                         </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                          padding: '3px 9px',
-                          borderRadius: '9999px',
-                          color: '#c0c1ff',
-                        }}
-                      >
+                      <span className="text-xs font-medium bg-white/5 px-2.5 py-1 rounded-full text-indigo-300 shrink-0 tabular-nums">
                         {subject.total_clases} {subject.total_clases === 1 ? 'clase' : 'clases'}
                       </span>
                     </div>
 
                     {/* Lista de Clases */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="flex flex-col gap-2.5 mt-4">
                       {subject.clases.length === 0 ? (
-                        <div style={{ fontSize: '0.82rem', color: '#64748b', fontStyle: 'italic', padding: '8px 0' }}>
-                          Sin temas procesados aún.
+                        <div className="text-xs text-slate-500 italic py-2">
+                          Sin temas procesados aun.
                         </div>
                       ) : (
                         subject.clases.map((clase) => (
-                          <div
+                          <button
+                            type="button"
                             key={clase.id}
                             onClick={() => handleSelectClass(subject.materia, clase.id)}
-                            style={{
-                              backgroundColor: '#13161f',
-                              borderRadius: '10px',
-                              border:
-                                selectedSubject === subject.materia && selectedClass === clase.id
-                                  ? '1px solid rgba(128, 131, 255, 0.4)'
-                                  : '1px solid rgba(255, 255, 255, 0.04)',
-                              padding: '12px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '6px',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s',
-                            }}
+                            className={`w-full text-left rounded-xl p-3.5 flex flex-col gap-2 cursor-pointer transition-colors border ${
+                              selectedSubject === subject.materia && selectedClass === clase.id
+                                ? 'bg-[#181d2e] border-indigo-500/40'
+                                : 'bg-[#0f121d] border-white/5 hover:border-white/10 hover:bg-[#131625]'
+                            }`}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                                <FileText size={16} color="#94a3b8" style={{ flexShrink: 0 }} />
-                                <span
-                                  style={{
-                                    fontSize: '0.88rem',
-                                    fontWeight: 500,
-                                    color: '#e2e8f0',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                  }}
-                                >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
+                                <FileText size={16} className="text-slate-400 shrink-0" aria-hidden="true" />
+                                <span className="text-sm font-medium text-slate-200 truncate min-w-0" title={clase.nombre}>
                                   {clase.nombre}
                                 </span>
                               </div>
-                              <ArrowRight size={14} color="#64748b" />
+                              <ArrowRight size={14} className="text-slate-500 shrink-0" aria-hidden="true" />
                             </div>
 
                             {/* Etiquetas */}
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                            <div className="flex flex-wrap gap-1.5 mt-1">
                               {clase.tiene_apuntes && (
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '3px',
-                                    fontSize: '0.68rem',
-                                    padding: '2px 6px',
-                                    borderRadius: '5px',
-                                    backgroundColor: 'rgba(78, 222, 163, 0.12)',
-                                    color: '#4edea3',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  <CheckCircle2 size={11} />
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">
+                                  <CheckCircle2 size={10} aria-hidden="true" />
                                   Apuntes
                                 </span>
                               )}
                               {clase.tiene_preguntas && (
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '3px',
-                                    fontSize: '0.68rem',
-                                    padding: '2px 6px',
-                                    borderRadius: '5px',
-                                    backgroundColor: 'rgba(128, 131, 255, 0.12)',
-                                    color: '#c0c1ff',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  <HelpCircle size={11} />
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 font-medium">
+                                  <HelpCircle size={10} aria-hidden="true" />
                                   Quiz
                                 </span>
                               )}
                             </div>
-                          </div>
+                          </button>
                         ))
                       )}
                     </div>

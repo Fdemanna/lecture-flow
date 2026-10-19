@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  Flame,
-  Zap,
   Trophy,
   CheckCircle2,
   XCircle,
@@ -62,7 +60,7 @@ export function PracticeSession({ onSessionCompleted, onClose }: PracticeSession
       const lista = await getDueQuestions(5)
       setQuestions(lista)
       if (lista.length === 0) {
-        setError('No hay preguntas disponibles en tus clases. Procesa una clase primero.')
+        setError('No hay preguntas disponibles en tus clases. Genera apuntes para procesar preguntas.')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar las preguntas de evaluación.')
@@ -95,7 +93,7 @@ export function PracticeSession({ onSessionCompleted, onClose }: PracticeSession
         finalRacha: res.stats?.racha_actual ?? prev.finalRacha,
       }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al enviar tu respuesta.')
+      setError(err instanceof Error ? err.message : 'Error al registrar tu respuesta.')
     } finally {
       setSubmitting(false)
     }
@@ -117,356 +115,161 @@ export function PracticeSession({ onSessionCompleted, onClose }: PracticeSession
   const currentQ = questions[currentIndex]
   const LETRAS = ['A', 'B', 'C', 'D']
 
-  // =========================================================================
-  // 1. PANTALLA DE CARGA O ERROR
-  // =========================================================================
+  // 1. Pantalla de carga
   if (loading) {
     return (
-      <div
-        style={{
-          backgroundColor: '#171b26',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '18px',
-          padding: '60px 24px',
-          textAlign: 'center',
-          color: '#94a3b8',
-          maxWidth: '780px',
-          margin: '0 auto 32px',
-        }}
-      >
-        <RefreshCw size={32} className="animate-spin" style={{ margin: '0 auto 16px', color: '#8083ff' }} />
-        <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.15rem' }}>Preparando sesión de Active Recall...</h3>
-        <p style={{ margin: '6px 0 0', fontSize: '0.85rem' }}>
-          Seleccionando ítems prioritarios con algoritmo de repetición espaciada SM-2.
+      <div className="bg-[#141824] border border-white/7 rounded-2xl p-16 text-center text-slate-400 max-w-2xl mx-auto mb-8 shadow-xl">
+        <RefreshCw size={28} className="animate-spin text-[#4f6bff] mx-auto mb-3" />
+        <h3 className="text-base font-semibold text-slate-100 m-0">Preparando sesión de práctica</h3>
+        <p className="text-xs text-slate-500 mt-1.5 mb-0">
+          Seleccionando ítems prioritarios mediante el algoritmo SM-2 Lite.
         </p>
       </div>
     )
   }
 
+  // 2. Pantalla de error o sin preguntas
   if (error && questions.length === 0) {
     return (
-      <div
-        style={{
-          backgroundColor: '#171b26',
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          borderRadius: '18px',
-          padding: '40px 28px',
-          textAlign: 'center',
-          maxWidth: '680px',
-          margin: '0 auto 32px',
-        }}
-      >
-        <AlertCircle size={36} color="#ef4444" style={{ margin: '0 auto 12px' }} />
-        <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.15rem' }}>No hay preguntas disponibles</h3>
-        <p style={{ margin: '8px 0 20px', fontSize: '0.86rem', color: '#cbd5e1' }}>{error}</p>
+      <div className="bg-[#141824] border border-red-500/25 rounded-2xl p-10 text-center max-w-lg mx-auto mb-8 shadow-xl">
+        <AlertCircle size={32} className="text-red-400 mx-auto mb-3" />
+        <h3 className="text-base font-semibold text-slate-100 m-0">Sin preguntas para repasar</h3>
+        <p className="text-xs text-slate-400 mt-2 mb-6 leading-relaxed">{error}</p>
         <button
           onClick={onClose}
-          style={{
-            backgroundColor: '#8083ff',
-            color: '#fff',
-            border: 'none',
-            padding: '8px 18px',
-            borderRadius: '8px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
+          className="px-4 py-2 text-xs font-medium rounded-lg bg-[#4f6bff] text-white hover:bg-[#637eff] transition-colors cursor-pointer"
         >
-          Volver al Dashboard
+          Volver al espacio de trabajo
         </button>
       </div>
     )
   }
 
-  // =========================================================================
-  // 2. PANTALLA FINAL: RESUMEN DE SESIÓN COMPLETADA
-  // =========================================================================
+  // 3. Pantalla de resumen final
   if (isFinished) {
     const totalP = sessionScore.total || 1
     const porcentaje = Math.round((sessionScore.correct / totalP) * 100)
 
     return (
-      <div
-        style={{
-          backgroundColor: '#171b26',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '20px',
-          padding: '44px 32px',
-          textAlign: 'center',
-          maxWidth: '680px',
-          margin: '0 auto 32px',
-          boxShadow: '0 16px 44px rgba(0, 0, 0, 0.45)',
-        }}
-      >
-        {/* Icono de Trofeo */}
-        <div
-          style={{
-            width: '72px',
-            height: '72px',
-            borderRadius: '50%',
-            backgroundColor: 'rgba(251, 191, 36, 0.15)',
-            border: '1px solid rgba(251, 191, 36, 0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 18px',
-            color: '#fbbf24',
-          }}
-        >
-          <Trophy size={38} />
+      <div className="bg-[#141824] border border-white/8 rounded-2xl p-10 text-center max-w-xl mx-auto mb-8 shadow-2xl">
+        <div className="w-14 h-14 rounded-full bg-[#4f6bff]/15 border border-[#4f6bff]/30 flex items-center justify-center mx-auto mb-4 text-[#8083ff]">
+          <Trophy size={28} />
         </div>
 
-        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f8fafc', margin: '0 0 8px' }}>
-          ¡Sesión de Práctica Completada!
+        <h2 className="text-xl font-bold text-slate-100 m-0 mb-1 text-balance">
+          Sesión de práctica completada
         </h2>
-        <p style={{ margin: '0 0 28px', color: '#94a3b8', fontSize: '0.9rem' }}>
+        <p className="text-xs text-slate-400 m-0 mb-6 text-pretty">
           Has repasado tus conocimientos con repetición espaciada SM-2 Lite.
         </p>
 
-        {/* 3 Cápsulas Estadísticas */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '16px',
-            flexWrap: 'wrap',
-            marginBottom: '32px',
-          }}
-        >
-          {/* Cápsula Puntuación */}
-          <div
-            style={{
-              backgroundColor: '#1c1f2a',
-              border: '1px solid rgba(128, 131, 255, 0.25)',
-              borderRadius: '12px',
-              padding: '16px 20px',
-              minWidth: '150px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>
-              <Trophy size={14} color="#8083ff" />
-              <span>Puntuación</span>
-            </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#c0c1ff', marginTop: '2px' }}>
-              {sessionScore.correct} / {sessionScore.total} ({porcentaje}%)
-            </div>
+        {/* Métricas clave */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+          <div className="bg-[#0b0e14] border border-white/6 rounded-xl p-4">
+            <span className="text-[11px] font-mono text-slate-500 block mb-1">Puntuación</span>
+            <span className="text-lg font-bold text-[#c0c1ff] tabular-nums">
+              {sessionScore.correct} / {sessionScore.total}
+            </span>
+            <span className="text-[11px] text-slate-500 block mt-0.5 font-mono tabular-nums">({porcentaje}%)</span>
           </div>
 
-          {/* Cápsula Experiencia */}
-          <div
-            style={{
-              backgroundColor: '#1c1f2a',
-              border: '1px solid rgba(78, 222, 163, 0.25)',
-              borderRadius: '12px',
-              padding: '16px 20px',
-              minWidth: '150px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>
-              <Zap size={14} color="#4edea3" />
-              <span>Experiencia Ganada</span>
-            </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#4edea3', marginTop: '2px' }}>
+          <div className="bg-[#0b0e14] border border-white/6 rounded-xl p-4">
+            <span className="text-[11px] font-mono text-slate-500 block mb-1">Experiencia</span>
+            <span className="text-lg font-bold text-[#34d399] tabular-nums">
               +{sessionScore.xpEarned} XP
-            </div>
+            </span>
+            <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">acumulada</span>
           </div>
 
-          {/* Cápsula Racha */}
-          <div
-            style={{
-              backgroundColor: '#1c1f2a',
-              border: '1px solid rgba(251, 146, 60, 0.25)',
-              borderRadius: '12px',
-              padding: '16px 20px',
-              minWidth: '150px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>
-              <Flame size={14} color="#fb923c" />
-              <span>Racha Diaria</span>
-            </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#fb923c', marginTop: '2px' }}>
-              🔥 {sessionScore.finalRacha} {sessionScore.finalRacha === 1 ? 'día' : 'días'}
-            </div>
+          <div className="bg-[#0b0e14] border border-white/6 rounded-xl p-4">
+            <span className="text-[11px] font-mono text-slate-500 block mb-1">Racha diaria</span>
+            <span className="text-lg font-bold text-[#e5a158] tabular-nums">
+              {sessionScore.finalRacha} {sessionScore.finalRacha === 1 ? 'día' : 'días'}
+            </span>
+            <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">consecutivos</span>
           </div>
         </div>
 
-        {/* Botones de Acción */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '14px' }}>
+        {/* Acciones finales */}
+        <div className="flex items-center justify-center gap-3">
           <button
             onClick={cargarPreguntas}
-            style={{
-              backgroundColor: '#12151e',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              color: '#cbd5e1',
-              padding: '10px 20px',
-              borderRadius: '10px',
-              fontSize: '0.88rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
           >
-            <RotateCcw size={16} />
-            Iniciar Otra Sesión
+            <RotateCcw size={14} />
+            <span>Iniciar otra sesión</span>
           </button>
           <button
             onClick={onClose}
-            style={{
-              backgroundColor: '#8083ff',
-              border: 'none',
-              color: '#ffffff',
-              padding: '10px 24px',
-              borderRadius: '10px',
-              fontSize: '0.88rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 4px 18px rgba(128, 131, 255, 0.35)',
-            }}
+            className="px-5 py-2 text-xs font-medium rounded-lg bg-[#4f6bff] text-white hover:bg-[#637eff] transition-colors cursor-pointer shadow-sm"
           >
-            Volver al Dashboard
+            Volver al espacio de trabajo
           </button>
         </div>
       </div>
     )
   }
 
-  // =========================================================================
-  // 3. TARJETA DE PREGUNTA INTERACTIVA
-  // =========================================================================
+  // 4. Tarjeta interactiva de pregunta
   return (
-    <div
-      style={{
-        backgroundColor: '#171b26',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '20px',
-        padding: '32px',
-        maxWidth: '820px',
-        margin: '0 auto 32px',
-        boxShadow: '0 12px 36px rgba(0, 0, 0, 0.35)',
-      }}
-    >
-      {/* Cabecera de la Sesión: Progreso e Indicadores */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-          paddingBottom: '16px',
-          marginBottom: '24px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span
-            style={{
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              backgroundColor: 'rgba(128, 131, 255, 0.15)',
-              color: '#c0c1ff',
-              padding: '3px 9px',
-              borderRadius: '6px',
-              border: '1px solid rgba(128, 131, 255, 0.25)',
-            }}
-          >
+    <div className="bg-[#141824] border border-white/7 rounded-2xl p-8 max-w-3xl mx-auto mb-8 shadow-2xl">
+      {/* Cabecera de la pregunta */}
+      <header className="flex items-center justify-between border-b border-white/6 pb-4 mb-6">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="font-medium text-slate-300 bg-white/5 border border-white/8 px-2 py-0.5 rounded">
             {currentQ?.materia_nombre || currentQ?.materia}
           </span>
-          <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+          <span className="text-slate-600">/</span>
+          <span className="text-slate-400">
             {currentQ?.clase_nombre || currentQ?.clase}
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <span
-            style={{
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              color: '#94a3b8',
-              backgroundColor: '#12151e',
-              padding: '4px 10px',
-              borderRadius: '9999px',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-            }}
-          >
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono tabular-nums text-slate-400 bg-white/5 px-2.5 py-1 rounded-full border border-white/6">
             Pregunta {currentIndex + 1} de {questions.length}
           </span>
           <button
             onClick={onClose}
+            className="text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
             title="Cerrar sesión"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#94a3b8',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-            }}
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Enunciado de la Pregunta */}
-      <div style={{ marginBottom: '24px' }}>
-        <h3
-          style={{
-            fontSize: '1.25rem',
-            fontWeight: 700,
-            color: '#f8fafc',
-            lineHeight: 1.45,
-            margin: '0 0 12px',
-          }}
-        >
+      {/* Enunciado */}
+      <div className="mb-6">
+        <h3 className="text-base sm:text-lg font-semibold text-slate-100 leading-snug m-0 mb-3 text-pretty">
           {currentQ?.pregunta}
         </h3>
 
-        {/* Bloque de Código si existe */}
         {currentQ?.codigo && (
-          <pre
-            style={{
-              backgroundColor: '#0c0f17',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              borderRadius: '8px',
-              padding: '14px 18px',
-              color: '#f8fafc',
-              fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
-              fontSize: '0.86rem',
-              overflowX: 'auto',
-              margin: '12px 0 0',
-            }}
-          >
+          <pre className="bg-[#090c12] border border-white/6 rounded-lg p-4 font-mono text-xs text-slate-200 overflow-x-auto mt-3">
             <code>{currentQ.codigo}</code>
           </pre>
         )}
       </div>
 
-      {/* Botones de Opciones */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+      {/* Opciones */}
+      <div className="flex flex-col gap-2.5 mb-6">
         {currentQ?.opciones.map((opcionRaw, idx) => {
-          // Limpiar prefijo repetido tipo A) o 1.
           const textoLimpio = opcionRaw.replace(/^[A-Da-d][\)\.\-]\s*/, '').trim()
           const letra = LETRAS[idx] || String(idx + 1)
 
-          let btnBg = '#12151e'
-          let btnBorder = 'rgba(255, 255, 255, 0.06)'
-          let textColor = '#e2e8f0'
+          let cardStyle = 'bg-[#0b0e14] border-white/7 text-slate-300 hover:bg-[#1a2030] hover:text-white'
           let indicatorIcon = null
 
           if (answerResult !== null) {
             if (idx === answerResult.correct_index) {
-              btnBg = 'rgba(78, 222, 163, 0.15)'
-              btnBorder = 'rgba(78, 222, 163, 0.5)'
-              textColor = '#4edea3'
-              indicatorIcon = <CheckCircle2 size={18} color="#4edea3" />
+              cardStyle = 'bg-[#34d399]/15 border-[#34d399]/40 text-[#34d399]'
+              indicatorIcon = <CheckCircle2 size={16} className="text-[#34d399] shrink-0" />
             } else if (idx === selectedOption && !answerResult.correct) {
-              btnBg = 'rgba(239, 68, 68, 0.15)'
-              btnBorder = 'rgba(239, 68, 68, 0.5)'
-              textColor = '#fca5a5'
-              indicatorIcon = <XCircle size={18} color="#ef4444" />
+              cardStyle = 'bg-[#f87171]/15 border-[#f87171]/40 text-[#f87171]'
+              indicatorIcon = <XCircle size={16} className="text-[#f87171] shrink-0" />
             } else {
-              textColor = '#64748b'
+              cardStyle = 'bg-[#0b0e14]/50 border-white/5 text-slate-600 opacity-60'
             }
           }
 
@@ -475,33 +278,13 @@ export function PracticeSession({ onSessionCompleted, onClose }: PracticeSession
               key={idx}
               onClick={() => handleSelectOption(idx)}
               disabled={submitting || answerResult !== null}
-              style={{
-                backgroundColor: btnBg,
-                border: `1px solid ${btnBorder}`,
-                borderRadius: '12px',
-                padding: '14px 18px',
-                textAlign: 'left',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                cursor: answerResult === null && !submitting ? 'pointer' : 'default',
-                transition: 'all 0.15s ease',
-              }}
+              className={`p-3.5 rounded-xl border text-left flex items-center justify-between gap-3 transition-colors cursor-pointer disabled:cursor-default ${cardStyle}`}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                <span
-                  style={{
-                    fontWeight: 700,
-                    color: answerResult !== null && idx === answerResult.correct_index ? '#4edea3' : '#8083ff',
-                    minWidth: '22px',
-                  }}
-                >
+              <div className="flex items-start gap-3">
+                <span className="font-mono font-semibold text-xs text-slate-400 mt-0.5 min-w-[18px]">
                   {letra})
                 </span>
-                <span style={{ fontSize: '0.92rem', color: textColor, lineHeight: 1.4 }}>
-                  {textoLimpio}
-                </span>
+                <span className="text-xs leading-relaxed">{textoLimpio}</span>
               </div>
               {indicatorIcon}
             </button>
@@ -509,33 +292,29 @@ export function PracticeSession({ onSessionCompleted, onClose }: PracticeSession
         })}
       </div>
 
-      {/* Caja de Explicación y Botón Continuar */}
+      {/* Explicación y botón siguiente */}
       {answerResult !== null && (
         <div
-          style={{
-            backgroundColor: answerResult.correct ? 'rgba(78, 222, 163, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-            border: `1px solid ${answerResult.correct ? 'rgba(78, 222, 163, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-            borderRadius: '14px',
-            padding: '20px 24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '14px',
-          }}
+          className={`p-4 rounded-xl border flex flex-col gap-3 ${
+            answerResult.correct
+              ? 'bg-[#34d399]/10 border-[#34d399]/30 text-slate-200'
+              : 'bg-[#f87171]/10 border-[#f87171]/30 text-slate-200'
+          }`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               {answerResult.correct ? (
                 <>
-                  <CheckCircle2 size={18} color="#4edea3" />
-                  <span style={{ color: '#4edea3', fontWeight: 700, fontSize: '0.95rem' }}>
-                    ¡Correcto! (+10 XP)
+                  <CheckCircle2 size={16} className="text-[#34d399]" />
+                  <span className="text-xs font-semibold text-[#34d399]">
+                    Respuesta correcta (+10 XP)
                   </span>
                 </>
               ) : (
                 <>
-                  <XCircle size={18} color="#ef4444" />
-                  <span style={{ color: '#f87171', fontWeight: 700, fontSize: '0.95rem' }}>
-                    Respuesta Incorrecta
+                  <XCircle size={16} className="text-[#f87171]" />
+                  <span className="text-xs font-semibold text-[#f87171]">
+                    Respuesta incorrecta
                   </span>
                 </>
               )}
@@ -543,27 +322,14 @@ export function PracticeSession({ onSessionCompleted, onClose }: PracticeSession
 
             <button
               onClick={handleNextQuestion}
-              style={{
-                backgroundColor: '#8083ff',
-                color: '#ffffff',
-                border: 'none',
-                padding: '8px 18px',
-                borderRadius: '8px',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 10px rgba(128, 131, 255, 0.3)',
-              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg bg-[#4f6bff] text-white hover:bg-[#637eff] transition-colors cursor-pointer shadow-sm"
             >
-              <span>{currentIndex + 1 < questions.length ? 'Siguiente Pregunta' : 'Ver Resultados'}</span>
-              <ArrowRight size={15} />
+              <span>{currentIndex + 1 < questions.length ? 'Siguiente pregunta' : 'Ver resultados'}</span>
+              <ArrowRight size={13} />
             </button>
           </div>
 
-          <p style={{ margin: 0, fontSize: '0.88rem', color: '#cbd5e1', lineHeight: 1.6 }}>
+          <p className="text-xs text-slate-300 leading-relaxed m-0 border-t border-white/6 pt-2">
             {answerResult.explanation}
           </p>
         </div>

@@ -11,7 +11,8 @@ import {
   X,
   AlertTriangle,
   FolderOpen,
-  Flame,
+  Sparkles,
+  Plus,
 } from 'lucide-react'
 import {
   type SubjectTree,
@@ -27,6 +28,8 @@ interface SidebarProps {
   onRefresh: () => Promise<void>
   onNewProcessing?: () => void
   onOpenPractice?: () => void
+  isOpenMobile?: boolean
+  onCloseMobile?: () => void
 }
 
 export function Sidebar({
@@ -37,8 +40,10 @@ export function Sidebar({
   onRefresh,
   onNewProcessing,
   onOpenPractice,
+  isOpenMobile = false,
+  onCloseMobile,
 }: SidebarProps) {
-  // Estado para acordeones expandidos por defecto
+  // Estado para acordeones expandidos
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
     classes.forEach((c) => {
@@ -118,133 +123,79 @@ export function Sidebar({
   }
 
   return (
-    <aside
-      style={{
-        width: '320px',
-        flexShrink: 0,
-        backgroundColor: '#121622',
-        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: 'calc(100vh - 73px)',
-        maxHeight: 'calc(100vh - 73px)',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        position: 'sticky',
-        top: '73px',
-      }}
-    >
-      {/* Cabecera del Sidebar */}
-      <div
-        style={{
-          padding: '16px 20px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
+    <>
+      {/* Backdrop para pantallas móviles y tablets (< lg) */}
+      {isOpenMobile && (
+        <div
+          onClick={onCloseMobile}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed lg:sticky top-0 lg:top-16 inset-y-0 left-0 z-40 w-[280px] shrink-0 bg-[#0f131d] border-r border-white/6 flex flex-col h-full lg:h-[calc(100vh-4rem)] max-h-full lg:max-h-[calc(100vh-4rem)] box-border overflow-hidden transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+          isOpenMobile ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'
+        }`}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <FolderOpen size={18} color="#8083ff" />
-          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f8fafc' }}>
-            Explorador de Clases
-          </span>
+        {/* Cabecera del explorador */}
+        <div className="px-5 py-4 border-b border-white/6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-slate-200">
+            <FolderOpen size={16} className="text-[#4f6bff]" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 m-0 text-balance">
+              Explorador de clases
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono tabular-nums text-slate-500 bg-white/5 px-2 py-0.5 rounded-full border border-white/6">
+              {classes.length} {classes.length === 1 ? 'materia' : ' materias'}
+            </span>
+            {onCloseMobile && (
+              <button
+                onClick={onCloseMobile}
+                className="lg:hidden p-1 text-slate-400 hover:text-white rounded transition-colors"
+                aria-label="Cerrar panel de clases"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
-        <span
-          style={{
-            fontSize: '0.72rem',
-            color: '#94a3b8',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-          }}
-        >
-          {classes.length} materias
-        </span>
-      </div>
 
-      {/* Botones de Acción Rápida: Práctica Diaria e Ingesta */}
-      <div
-        style={{
-          padding: '10px 14px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-        }}
-      >
-        {onOpenPractice && (
-          <button
-            onClick={onOpenPractice}
-            style={{
-              width: '100%',
-              backgroundColor: 'rgba(251, 146, 60, 0.12)',
-              border: '1px solid rgba(251, 146, 60, 0.3)',
-              color: '#fb923c',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(251, 146, 60, 0.2)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(251, 146, 60, 0.12)'
-            }}
-          >
-            <Flame size={15} color="#fb923c" />
-            <span>🔥 Práctica Diaria (SM-2)</span>
-          </button>
-        )}
+        {/* Botones de acción rápida: Práctica e Ingesta */}
+        <div className="p-3 border-b border-white/5 flex flex-col gap-2">
+          {onOpenPractice && (
+            <button
+              onClick={() => {
+                onOpenPractice()
+                if (onCloseMobile) onCloseMobile()
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-[#e5a158]/10 border border-[#e5a158]/25 text-[#e5a158] hover:bg-[#e5a158]/20 transition-colors cursor-pointer"
+            >
+              <Sparkles size={14} />
+              <span>Sesión de práctica diaria</span>
+            </button>
+          )}
 
-        {onNewProcessing && (
-          <button
-            onClick={onNewProcessing}
-            style={{
-              width: '100%',
-              backgroundColor: 'rgba(128, 131, 255, 0.12)',
-              border: '1px solid rgba(128, 131, 255, 0.28)',
-              color: '#c0c1ff',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'background-color 0.2s',
-            }}
-          >
-            <span>➕ Nueva Clase / Ingesta</span>
-          </button>
-        )}
-      </div>
+          {onNewProcessing && (
+            <button
+              onClick={() => {
+                onNewProcessing()
+                if (onCloseMobile) onCloseMobile()
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+            >
+              <Plus size={14} className="text-[#4f6bff]" />
+              <span>Nueva clase o ingesta</span>
+            </button>
+          )}
+        </div>
 
-      {/* Lista Desplazable de Asignaturas y Temas */}
-      <div
-        className="sidebar-scrollable"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          padding: '12px 10px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-        }}
-      >
+      {/* Lista desplazable de asignaturas y temas */}
+      <div className="sidebar-scrollable flex-1 min-h-0 overflow-y-auto p-2.5 flex flex-col gap-1.5">
         {classes.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748b', fontSize: '0.85rem' }}>
-            No hay asignaturas creadas en clases/.
+          <div className="text-center py-12 px-4 text-slate-500 text-xs">
+            No se han registrado asignaturas en el directorio clases/.
           </div>
         ) : (
           classes.map((subject) => {
@@ -253,105 +204,63 @@ export function Sidebar({
             return (
               <div
                 key={subject.materia}
-                style={{
-                  backgroundColor: '#171b26',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(255, 255, 255, 0.04)',
-                  overflow: 'hidden',
-                }}
+                className="bg-[#141824] rounded-lg border border-white/5 overflow-hidden transition-colors"
               >
-                {/* Cabecera de Asignatura (Acordeón) */}
+                {/* Cabecera de materia (acordeón) */}
                 <div
-                  onClick={() => toggleAccordion(subject.materia)}
-                  style={{
-                    padding: '10px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    backgroundColor: isExpanded ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
-                    transition: 'background-color 0.2s',
-                  }}
+                  className={`px-3 py-2.5 flex items-center justify-between gap-2 transition-colors ${
+                    isExpanded ? 'bg-white/[0.02]' : 'hover:bg-white/[0.02]'
+                  }`}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleAccordion(subject.materia)}
+                    aria-expanded={isExpanded}
+                    aria-label={`${subject.materia_nombre}, ${subject.total_clases} clases. ${isExpanded ? 'Plegar' : 'Desplegar'}`}
+                    className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden text-left cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#4f6bff]"
+                  >
                     {isExpanded ? (
-                      <ChevronDown size={15} color="#94a3b8" />
+                      <ChevronDown size={14} className="text-slate-500 shrink-0" aria-hidden="true" />
                     ) : (
-                      <ChevronRight size={15} color="#94a3b8" />
+                      <ChevronRight size={14} className="text-slate-500 shrink-0" aria-hidden="true" />
                     )}
-                    <Folder size={16} color="#8083ff" style={{ flexShrink: 0 }} />
+                    <Folder size={15} className="text-[#4f6bff] shrink-0" aria-hidden="true" />
                     <span
-                      style={{
-                        fontSize: '0.86rem',
-                        fontWeight: 600,
-                        color: '#f8fafc',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
+                      className="text-xs font-medium text-slate-200 truncate min-w-0"
                       title={subject.materia_nombre}
                     >
                       {subject.materia_nombre}
                     </span>
-                  </div>
+                  </button>
 
-                  {/* Acciones de la Materia */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  {/* Acciones de gestión para la materia */}
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
+                      type="button"
                       onClick={(e) => abrirRenombrar(e, subject)}
                       title={`Renombrar ${subject.materia_nombre}`}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#94a3b8',
-                        padding: '4px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = '#c0c1ff')}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                      aria-label={`Renombrar asignatura ${subject.materia_nombre}`}
+                      className="p-1 text-slate-500 hover:text-slate-300 rounded transition-colors cursor-pointer"
                     >
-                      <Pencil size={13} />
+                      <Pencil size={12} aria-hidden="true" />
                     </button>
                     <button
+                      type="button"
                       onClick={(e) => abrirEliminar(e, subject)}
                       title={`Eliminar ${subject.materia_nombre}`}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#94a3b8',
-                        padding: '4px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                      aria-label={`Eliminar asignatura ${subject.materia_nombre}`}
+                      className="p-1 text-slate-500 hover:text-red-400 rounded transition-colors cursor-pointer"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={12} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
 
-                {/* Sublista de Clases dentro del Acordeón */}
+                {/* Sublista de clases */}
                 {isExpanded && (
-                  <div
-                    style={{
-                      padding: '4px 8px 8px 16px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '4px',
-                      borderTop: '1px solid rgba(255, 255, 255, 0.03)',
-                    }}
-                  >
+                  <div className="px-2 pt-1 pb-2 flex flex-col gap-1 border-t border-white/[0.03]">
                     {subject.clases.length === 0 ? (
-                      <div style={{ padding: '6px 8px', fontSize: '0.78rem', color: '#64748b', fontStyle: 'italic' }}>
+                      <div className="px-3 py-1.5 text-[11px] text-slate-500 italic">
                         Sin temas registrados.
                       </div>
                     ) : (
@@ -360,69 +269,44 @@ export function Sidebar({
                           selectedSubject === subject.materia && selectedClass === c.id
 
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={c.id}
-                            onClick={() => onSelectClass(subject.materia, c.id)}
-                            style={{
-                              padding: '8px 10px',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              backgroundColor: isSelected
-                                ? 'rgba(128, 131, 255, 0.15)'
-                                : 'transparent',
-                              border: isSelected
-                                ? '1px solid rgba(128, 131, 255, 0.3)'
-                                : '1px solid transparent',
-                              transition: 'all 0.15s',
+                            onClick={() => {
+                              onSelectClass(subject.materia, c.id)
+                              if (onCloseMobile) onCloseMobile()
                             }}
-                            onMouseEnter={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)'
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.backgroundColor = 'transparent'
-                              }
-                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-md cursor-pointer flex items-center justify-between gap-2 transition-colors ${
+                              isSelected
+                                ? 'bg-[#4f6bff]/15 border border-[#4f6bff]/30 text-white'
+                                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
+                            }`}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                            <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                               <FileText
-                                size={14}
-                                color={isSelected ? '#8083ff' : '#94a3b8'}
-                                style={{ flexShrink: 0 }}
+                                size={13}
+                                aria-hidden="true"
+                                className={isSelected ? 'text-[#4f6bff] shrink-0' : 'text-slate-500 shrink-0'}
                               />
-                              <span
-                                style={{
-                                  fontSize: '0.8rem',
-                                  color: isSelected ? '#f8fafc' : '#cbd5e1',
-                                  whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                }}
-                                title={c.nombre}
-                              >
+                              <span className="text-xs truncate min-w-0" title={c.nombre}>
                                 {c.nombre}
                               </span>
                             </div>
 
-                            {/* Indicadores compactos */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                            {/* Indicadores de artefactos generados */}
+                            <div className="flex items-center gap-1.5 shrink-0">
                               {c.tiene_apuntes && (
                                 <span title="Apuntes generados">
-                                  <CheckCircle2 size={12} color="#4edea3" />
+                                  <CheckCircle2 size={12} className="text-[#34d399]" aria-hidden="true" />
                                 </span>
                               )}
                               {c.tiene_preguntas && (
-                                <span title="Quiz SM-2 activo">
-                                  <HelpCircle size={12} color="#8083ff" />
+                                <span title="Banco de preguntas SM-2 disponible">
+                                  <HelpCircle size={12} className="text-[#4f6bff]" aria-hidden="true" />
                                 </span>
                               )}
                             </div>
-                          </div>
+                          </button>
                         )
                       })
                     )}
@@ -434,109 +318,59 @@ export function Sidebar({
         )}
       </div>
 
-      {/* MODAL DISCRETO: RENOMBRAR ASIGNATURA */}
+      {/* Modal: Renombrar asignatura */}
       {renamingSubject && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            padding: '16px',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#171b26',
-              border: '1px solid rgba(128, 131, 255, 0.3)',
-              borderRadius: '16px',
-              padding: '24px',
-              maxWidth: '420px',
-              width: '100%',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Pencil size={18} color="#8083ff" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#f8fafc' }}>
-                  Renombrar Asignatura
-                </h3>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#141824] border border-[#4f6bff]/30 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-slate-100">
+                <Pencil size={16} className="text-[#4f6bff]" />
+                <h3 className="text-sm font-semibold m-0">Renombrar asignatura</h3>
               </div>
               <button
                 onClick={() => setRenamingSubject(null)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                className="text-slate-500 hover:text-slate-300 cursor-pointer"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
             <form onSubmit={handleConfirmRename}>
-              <label style={{ display: 'block', fontSize: '0.82rem', color: '#94a3b8', marginBottom: '6px' }}>
-                Nuevo nombre para la carpeta:
+              <label htmlFor="rename-subject-input" className="block text-xs text-slate-400 mb-2 cursor-pointer">
+                Nuevo nombre para la carpeta en disco:
               </label>
               <input
+                id="rename-subject-input"
+                name="subjectName"
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={newNameInput}
                 onChange={(e) => setNewNameInput(e.target.value)}
                 autoFocus
                 disabled={renameLoading}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  backgroundColor: '#0f131d',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  marginBottom: '16px',
-                }}
+                className="w-full px-3 py-2 bg-[#0b0e14] border border-white/10 rounded-lg text-slate-100 text-xs outline-none focus:border-[#4f6bff] mb-3 font-mono"
               />
 
               {renameError && (
-                <div style={{ color: '#f87171', fontSize: '0.8rem', marginBottom: '14px' }}>
-                  {renameError}
-                </div>
+                <div className="text-red-400 text-xs mb-3">{renameError}</div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setRenamingSubject(null)}
                   disabled={renameLoading}
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#94a3b8',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                  }}
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 border border-white/10 rounded-lg cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={renameLoading}
-                  style={{
-                    backgroundColor: '#8083ff',
-                    border: 'none',
-                    color: '#fff',
-                    padding: '8px 18px',
-                    borderRadius: '8px',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
+                  className="px-3.5 py-1.5 text-xs font-medium bg-[#4f6bff] text-white hover:bg-[#637eff] rounded-lg cursor-pointer transition-colors"
                 >
-                  {renameLoading ? 'Guardando...' : 'Guardar Nombre'}
+                  {renameLoading ? 'Guardando…' : 'Guardar nombre'}
                 </button>
               </div>
             </form>
@@ -544,85 +378,42 @@ export function Sidebar({
         </div>
       )}
 
-      {/* MODAL DISCRETO: CONFIRMAR ELIMINACIÓN */}
+      {/* Modal: Confirmar eliminación */}
       {deletingSubject && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            padding: '16px',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#171b26',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '16px',
-              padding: '24px',
-              maxWidth: '440px',
-              width: '100%',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ef4444',
-                }}
-              >
-                <AlertTriangle size={20} />
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#141824] border border-red-500/30 rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 shrink-0">
+                <AlertTriangle size={18} />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
-                  ¿Eliminar asignatura?
+                <h3 className="text-sm font-semibold text-slate-100 m-0 text-balance">
+                  ¿Eliminar asignatura de forma permanente?
                 </h3>
-                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                <span className="text-xs text-slate-400 font-mono">
                   {deletingSubject.materia_nombre}
                 </span>
               </div>
             </div>
 
-            <p style={{ margin: '0 0 16px', fontSize: '0.86rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-              Esta acción eliminará de forma permanente la carpeta{' '}
-              <code style={{ color: '#fca5a5', backgroundColor: '#0f131d', padding: '2px 6px', borderRadius: '4px' }}>
+            <p className="text-xs text-slate-300 leading-relaxed mb-4 text-pretty">
+              Esta acción eliminará del disco la carpeta{' '}
+              <code className="text-red-300 bg-[#0b0e14] px-1.5 py-0.5 rounded border border-red-900/40">
                 clases/{deletingSubject.materia}
               </code>{' '}
-              junto con todos sus apuntes, audios y preguntas ({deletingSubject.total_clases} clases).
+              junto con todos sus apuntes, grabaciones y preguntas ({deletingSubject.total_clases} clases).
             </p>
 
             {deleteError && (
-              <div style={{ color: '#f87171', fontSize: '0.8rem', marginBottom: '14px' }}>
-                {deleteError}
-              </div>
+              <div className="text-red-400 text-xs mb-3">{deleteError}</div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setDeletingSubject(null)}
                 disabled={deleteLoading}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#94a3b8',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                }}
+                className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 border border-white/10 rounded-lg cursor-pointer"
               >
                 Cancelar
               </button>
@@ -630,23 +421,15 @@ export function Sidebar({
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={deleteLoading}
-                style={{
-                  backgroundColor: '#ef4444',
-                  border: 'none',
-                  color: '#fff',
-                  padding: '8px 18px',
-                  borderRadius: '8px',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                className="px-3.5 py-1.5 text-xs font-medium bg-red-600 text-white hover:bg-red-500 rounded-lg cursor-pointer transition-colors"
               >
-                {deleteLoading ? 'Eliminando...' : 'Eliminar Permanentemente'}
+                {deleteLoading ? 'Eliminando…' : 'Eliminar carpeta'}
               </button>
             </div>
           </div>
         </div>
       )}
     </aside>
+  </>
   )
 }

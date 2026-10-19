@@ -121,7 +121,7 @@ export function extractErrorMessage(
   data?: any
 ): string {
   if (status === 409) {
-    return '⚠️ Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
+    return 'Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
   }
 
   if (data) {

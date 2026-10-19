@@ -9,10 +9,10 @@ import {
   RefreshCw,
   X,
   Clock,
-  Sparkles,
   ExternalLink,
   Send,
   Share2,
+  FileText,
 } from 'lucide-react'
 import {
   getNotes,
@@ -68,7 +68,7 @@ export function NotesEditor({
       setSavedContent(res.contenido || '')
       setLastModified(res.ultima_modificacion || null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar los apuntes.')
+      setError(err instanceof Error ? err.message : 'Error al cargar los apuntes desde el disco.')
     } finally {
       setLoading(false)
     }
@@ -82,13 +82,13 @@ export function NotesEditor({
     if (regenerating || saving) return
 
     const confirmar = window.confirm(
-      '¿Regenerar apuntes usando los nuevos prompts? Los apuntes actuales se respaldarán automáticamente en un archivo .bak.'
+      '¿Regenerar apuntes usando el pipeline actual? Los apuntes actuales se respaldarán automáticamente en un archivo .bak.'
     )
     if (!confirmar) return
 
     setRegenerating(true)
     setRegenProgress(5)
-    setRegenMessage('Iniciando tarea de regeneración...')
+    setRegenMessage('Iniciando tarea de regeneración…')
     setError(null)
 
     try {
@@ -101,7 +101,7 @@ export function NotesEditor({
 
           if (ev.status === 'completed') {
             setRegenerating(false)
-            setToastMessage('¡Apuntes regenerados con éxito!')
+            setToastMessage('Apuntes regenerados con éxito.')
             cargarApuntes()
             setTimeout(() => setToastMessage(null), 5000)
           } else if (ev.status === 'failed' || ev.status === 'cancelled') {
@@ -110,7 +110,7 @@ export function NotesEditor({
           }
         },
         () => {
-          setRegenMessage('Reconectando con el servidor...')
+          setRegenMessage('Reconectando con el servidor de eventos…')
         }
       )
     } catch (err: any) {
@@ -126,7 +126,7 @@ export function NotesEditor({
 
       if (is409) {
         setError(
-          '⚠️ Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
+          'Conflicto (409): Ya hay una tarea de procesamiento en curso o existe un archivo de bloqueo pendiente.'
         )
       } else {
         setError(err instanceof Error ? err.message : String(err))
@@ -144,7 +144,7 @@ export function NotesEditor({
       setSavedContent(content)
       const ahora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       setSaveFeedback({
-        message: 'Guardado correctamente',
+        message: 'Guardado correctamente en disco',
         timestamp: ahora,
       })
       setTimeout(() => {
@@ -165,7 +165,7 @@ export function NotesEditor({
     try {
       const res = await exportToNotion(subject, className)
       setNotionUrl(res.url_notion)
-      setToastMessage('Exportado con éxito a Notion')
+      setToastMessage('Exportado con éxito a la base de datos de Notion.')
       setTimeout(() => {
         setToastMessage(null)
       }, 5000)
@@ -183,7 +183,7 @@ export function NotesEditor({
 
     try {
       await sendTelegramNotification(subject, className, notionUrl || undefined)
-      setToastMessage('Enviado a Telegram')
+      setToastMessage('Notificación enviada a Telegram.')
       setTimeout(() => {
         setToastMessage(null)
       }, 5000)
@@ -194,7 +194,6 @@ export function NotesEditor({
     }
   }
 
-  // Atajo de teclado: Ctrl+S o Cmd+S para guardar
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault()
@@ -204,575 +203,241 @@ export function NotesEditor({
 
   const hayCambiosSinGuardar = content !== savedContent
 
+  // Advertir al usuario antes de salir si hay cambios sin guardar
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (hayCambiosSinGuardar) {
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [hayCambiosSinGuardar])
+
   return (
-    <div
-      style={{
-        backgroundColor: '#171b26',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '18px',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 12px 36px rgba(0, 0, 0, 0.35)',
-        overflow: 'hidden',
-        minHeight: '680px',
-      }}
-    >
-      {/* 1. Barra Superior / Cabecera */}
-      <div
-        style={{
-          padding: '16px 24px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-          backgroundColor: '#121622',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
-        }}
-      >
-        {/* Información de Clase y Materia */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+    <div className="bg-[#141824] border border-white/7 rounded-2xl flex flex-col shadow-2xl overflow-hidden min-h-[700px]">
+      {/* 1. Barra Superior y Breadcrumb */}
+      <header className="px-6 py-4 border-b border-white/6 bg-[#0f131d] flex items-center justify-between flex-wrap gap-4">
+        {/* Metadatos de la clase */}
+        <div className="flex items-center gap-3">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span
-                style={{
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  backgroundColor: 'rgba(128, 131, 255, 0.15)',
-                  color: '#c0c1ff',
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(128, 131, 255, 0.25)',
-                }}
-              >
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-400 bg-white/5 border border-white/8 px-2 py-0.5 rounded">
                 {subjectName}
               </span>
-              <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc' }}>
+              <span className="text-slate-600 text-xs">/</span>
+              <h2 className="text-base font-semibold text-slate-100 m-0">
                 {classReadableName}
               </h2>
             </div>
             {lastModified && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.74rem', color: '#64748b', marginTop: '3px' }}>
-                <Clock size={12} />
-                <span>Última modificación en disco: {lastModified}</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1 font-mono">
+                <Clock size={12} className="text-slate-500" />
+                <span>Modificado: {lastModified}</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Controles de Modo y Acciones */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Selector Segmentado de Modo */}
-          <div
-            style={{
-              backgroundColor: '#0f131d',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '8px',
-              padding: '3px',
-              display: 'flex',
-              gap: '2px',
-            }}
-          >
+        {/* Acciones y selector de modo */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Segmented Control de modo Lectura / Editor */}
+          <div className="bg-[#0b0e14] border border-white/8 p-0.5 rounded-lg flex items-center gap-1">
             <button
               onClick={() => setMode('preview')}
-              style={{
-                backgroundColor: mode === 'preview' ? 'rgba(128, 131, 255, 0.2)' : 'transparent',
-                color: mode === 'preview' ? '#c0c1ff' : '#94a3b8',
-                border: mode === 'preview' ? '1px solid rgba(128, 131, 255, 0.3)' : '1px solid transparent',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.15s',
-              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                mode === 'preview'
+                  ? 'bg-[#1a2030] text-[#e2e8f0] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              <BookOpen size={14} />
-              Modo Lectura
+              <BookOpen size={13} className={mode === 'preview' ? 'text-[#4f6bff]' : 'text-slate-400'} />
+              <span>Lectura</span>
             </button>
             <button
               onClick={() => setMode('edit')}
-              style={{
-                backgroundColor: mode === 'edit' ? 'rgba(128, 131, 255, 0.2)' : 'transparent',
-                color: mode === 'edit' ? '#c0c1ff' : '#94a3b8',
-                border: mode === 'edit' ? '1px solid rgba(128, 131, 255, 0.3)' : '1px solid transparent',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.15s',
-              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                mode === 'edit'
+                  ? 'bg-[#1a2030] text-[#e2e8f0] shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              <Edit3 size={14} />
-              Modo Editor
+              <Edit3 size={13} className={mode === 'edit' ? 'text-[#4f6bff]' : 'text-slate-400'} />
+              <span>Editor</span>
             </button>
           </div>
 
-          {/* Botón Exportar a Notion / Enlace Directo */}
+          {/* Exportación a Notion */}
           {notionUrl ? (
             <a
               href={notionUrl}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                backgroundColor: 'rgba(128, 131, 255, 0.15)',
-                border: '1px solid rgba(128, 131, 255, 0.35)',
-                color: '#c0c1ff',
-                borderRadius: '8px',
-                padding: '6px 12px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.15s',
-              }}
-              title="Abrir página generada en Notion"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#4f6bff]/10 border border-[#4f6bff]/30 text-[#8083ff] hover:bg-[#4f6bff]/20 transition-colors"
             >
-              <ExternalLink size={14} color="#8083ff" />
-              <span>Abrir en Notion ↗</span>
+              <ExternalLink size={13} />
+              <span>Abrir en Notion</span>
             </a>
           ) : (
             <button
               onClick={handleExportNotion}
               disabled={exportingNotion || !content.trim()}
-              style={{
-                backgroundColor: 'rgba(128, 131, 255, 0.1)',
-                border: '1px solid rgba(128, 131, 255, 0.25)',
-                color: '#c0c1ff',
-                borderRadius: '8px',
-                padding: '6px 12px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: exportingNotion || !content.trim() ? 'default' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                opacity: !content.trim() ? 0.6 : 1,
-                transition: 'all 0.15s',
-              }}
-              title="Exportar apuntes directamente a Notion"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 transition-colors disabled:opacity-40 cursor-pointer"
             >
               {exportingNotion ? (
-                <RefreshCw size={14} className="animate-spin" />
+                <RefreshCw size={13} className="animate-spin text-slate-400" />
               ) : (
-                <Share2 size={14} />
+                <Share2 size={13} className="text-slate-400" />
               )}
-              <span>{exportingNotion ? 'Exportando...' : '📤 Exportar a Notion'}</span>
+              <span>{exportingNotion ? 'Exportando…' : 'Exportar a Notion'}</span>
             </button>
           )}
 
-          {/* Botón Notificar Telegram */}
+          {/* Notificar por Telegram */}
           <button
             onClick={handleSendTelegram}
             disabled={sendingTelegram || regenerating}
-            style={{
-              backgroundColor: 'rgba(56, 189, 248, 0.1)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
-              color: '#38bdf8',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: sendingTelegram || regenerating ? 'default' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s',
-            }}
-            title="Enviar notificación de la clase a tu canal/chat de Telegram"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Enviar notificación de la clase a Telegram"
           >
             {sendingTelegram ? (
-              <RefreshCw size={14} className="animate-spin" />
+              <RefreshCw size={13} className="animate-spin text-slate-400" />
             ) : (
-              <Send size={14} />
+              <Send size={13} className="text-slate-400" />
             )}
-            <span>{sendingTelegram ? 'Enviando...' : '📱 Notificar Telegram'}</span>
+            <span>{sendingTelegram ? 'Enviando…' : 'Notificar Telegram'}</span>
           </button>
 
-          {/* Botón Regenerar Apuntes */}
+          {/* Regenerar apuntes */}
           <button
             onClick={handleRegenerate}
             disabled={regenerating || saving || loading}
-            style={{
-              backgroundColor: 'rgba(128, 131, 255, 0.12)',
-              border: '1px solid rgba(128, 131, 255, 0.35)',
-              color: '#a5b4fc',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: regenerating || saving || loading ? 'default' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s',
-            }}
-            title="Regenerar apuntes a partir de la transcripción existente con los nuevos prompts"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 border border-white/8 text-slate-300 hover:bg-white/10 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Regenerar apuntes a partir de transcripcion.txt"
           >
-            <RefreshCw size={14} className={regenerating ? 'animate-spin' : ''} />
-            <span>{regenerating ? 'Regenerando...' : '🔄 Regenerar apuntes'}</span>
+            <RefreshCw size={13} className={regenerating ? 'animate-spin text-[#4f6bff]' : 'text-slate-400'} />
+            <span>{regenerating ? 'Regenerando…' : 'Regenerar'}</span>
           </button>
 
-          {/* Toast Feedback Temporal */}
-          {toastMessage && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.78rem',
-                color: '#4edea3',
-                backgroundColor: 'rgba(78, 222, 163, 0.12)',
-                border: '1px solid rgba(78, 222, 163, 0.25)',
-                padding: '6px 10px',
-                borderRadius: '6px',
-              }}
-            >
-              <CheckCircle2 size={13} />
-              <span>{toastMessage}</span>
-            </div>
-          )}
-
-          {/* Feedback de Guardado */}
-          {saveFeedback && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.78rem',
-                color: '#4edea3',
-                backgroundColor: 'rgba(78, 222, 163, 0.12)',
-                border: '1px solid rgba(78, 222, 163, 0.25)',
-                padding: '6px 10px',
-                borderRadius: '6px',
-              }}
-            >
-              <CheckCircle2 size={13} />
-              <span>{saveFeedback.message} ({saveFeedback.timestamp})</span>
-            </div>
-          )}
-
-          {/* Botón Guardar Cambios */}
+          {/* Guardar cambios (modo edición) */}
           {mode === 'edit' && (
             <button
               onClick={handleSave}
               disabled={saving || !hayCambiosSinGuardar}
-              style={{
-                backgroundColor: hayCambiosSinGuardar ? '#8083ff' : 'rgba(255, 255, 255, 0.05)',
-                color: hayCambiosSinGuardar ? '#ffffff' : '#64748b',
-                border: hayCambiosSinGuardar ? '1px solid rgba(128, 131, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '8px',
-                padding: '7px 16px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: hayCambiosSinGuardar && !saving ? 'pointer' : 'default',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: hayCambiosSinGuardar ? '0 0 16px rgba(128, 131, 255, 0.3)' : 'none',
-                transition: 'all 0.2s',
-              }}
-              title="Guardar apuntes (Ctrl+S / Cmd+S)"
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+                hayCambiosSinGuardar
+                  ? 'bg-[#4f6bff] text-white hover:bg-[#637eff] shadow-sm'
+                  : 'bg-white/5 text-slate-500 border border-white/5'
+              }`}
             >
-              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-              {saving ? 'Guardando...' : hayCambiosSinGuardar ? 'Guardar Cambios *' : 'Al día'}
+              {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+              <span>{saving ? 'Guardando…' : hayCambiosSinGuardar ? 'Guardar cambios' : 'Al día'}</span>
             </button>
           )}
 
-          {/* Botón Cerrar Visor */}
+          {/* Botón cerrar */}
           <button
             onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors cursor-pointer"
             title="Cerrar visor"
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: '#94a3b8',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            aria-label="Cerrar visor de apuntes"
           >
-            <X size={18} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Banner de Regeneración en Progreso con SSE */}
+      {/* 2. Banners de feedback y progreso */}
+      {toastMessage && (
+        <div role="status" aria-live="polite" className="mx-6 mt-4 p-3 rounded-lg bg-[#34d399]/10 border border-[#34d399]/25 text-[#34d399] text-xs flex items-center gap-2">
+          <CheckCircle2 size={14} aria-hidden="true" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {saveFeedback && (
+        <div role="status" aria-live="polite" className="mx-6 mt-4 p-3 rounded-lg bg-[#34d399]/10 border border-[#34d399]/25 text-[#34d399] text-xs flex items-center gap-2">
+          <CheckCircle2 size={14} aria-hidden="true" />
+          <span>{saveFeedback.message} ({saveFeedback.timestamp})</span>
+        </div>
+      )}
+
       {regenerating && (
-        <div
-          style={{
-            margin: '12px 24px 0',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(128, 131, 255, 0.12)',
-            border: '1px solid rgba(128, 131, 255, 0.35)',
-            color: '#c7d2fe',
-            fontSize: '0.85rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <RefreshCw size={15} className="animate-spin" color="#8083ff" />
-              <span style={{ fontWeight: 600 }}>{regenMessage || 'Regenerando apuntes con nuevos prompts...'}</span>
+        <div role="status" aria-live="polite" className="mx-6 mt-4 p-3.5 rounded-lg bg-[#4f6bff]/10 border border-[#4f6bff]/25 text-slate-200 text-xs flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-medium">
+              <RefreshCw size={13} className="animate-spin text-[#4f6bff]" aria-hidden="true" />
+              <span>{regenMessage || 'Regenerando apuntes en segundo plano…'}</span>
             </div>
-            <span style={{ fontSize: '0.8rem', color: '#8083ff', fontWeight: 700 }}>{regenProgress}%</span>
+            <span className="font-mono font-semibold text-[#8083ff] tabular-nums">{regenProgress}%</span>
           </div>
-          <div style={{ width: '100%', height: '5px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
             <div
-              style={{
-                width: `${regenProgress}%`,
-                height: '100%',
-                backgroundColor: '#8083ff',
-                transition: 'width 0.3s ease',
-              }}
+              className="h-full bg-[#4f6bff] transition-[width] duration-300 ease-out rounded-full"
+              style={{ width: `${regenProgress}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* 2. Banner de Error si ocurre */}
       {error && (
-        <div
-          style={{
-            margin: '12px 24px 0',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-            color: '#fca5a5',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <AlertCircle size={16} />
+        <div role="alert" aria-live="assertive" className="mx-6 mt-4 p-3.5 rounded-lg bg-[#f87171]/10 border border-[#f87171]/25 text-[#f87171] text-xs flex items-center gap-2">
+          <AlertCircle size={15} className="shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* 3. Área de Contenido (Lectura vs Editor) */}
-      <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column' }}>
+      {/* 3. Área de Lectura y Edición */}
+      <main className="flex-1 p-6 flex flex-col overflow-y-auto">
         {loading ? (
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#94a3b8',
-              padding: '80px 0',
-            }}
-          >
-            <RefreshCw size={28} className="animate-spin" style={{ marginBottom: '12px', color: '#8083ff' }} />
-            <p style={{ margin: 0, fontSize: '0.9rem' }}>Cargando apuntes desde el disco local...</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-24">
+            <RefreshCw size={24} className="animate-spin text-[#4f6bff] mb-3" aria-hidden="true" />
+            <p className="text-sm m-0">Leyendo apuntes desde el disco local…</p>
           </div>
         ) : mode === 'edit' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <div className="flex flex-col flex-1">
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="# Escribe aquí tus apuntes en formato Markdown..."
-              style={{
-                width: '100%',
-                flex: 1,
-                minHeight: '560px',
-                backgroundColor: '#12151e',
-                color: '#f8fafc',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '12px',
-                padding: '20px',
-                fontFamily: "ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                fontSize: '0.9rem',
-                lineHeight: 1.6,
-                boxSizing: 'border-box',
-                resize: 'vertical',
-                outline: 'none',
-              }}
+              aria-label="Editor de apuntes Markdown"
+              placeholder="Escribe aquí tus apuntes en formato Markdown…"
+              className="w-full flex-1 min-h-[560px] bg-[#0b0e14] text-[#e2e8f0] border border-white/8 rounded-xl p-5 font-mono text-sm leading-relaxed outline-none focus:border-[#4f6bff]/60 resize-y"
             />
-            <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b' }}>
-              <span>Consejo: pulsa <strong>Ctrl + S</strong> / <strong>Cmd + S</strong> para guardar rápidamente.</span>
-              <span>{content.length} caracteres • {content.split(/\s+/).filter(Boolean).length} palabras</span>
-            </div>
+            <footer className="mt-3 flex items-center justify-between text-xs text-slate-500 font-mono">
+              <span>Atajo: pulsa Ctrl + S o Cmd + S para guardar los cambios.</span>
+              <span>
+                {content.length} caracteres • {content.split(/\s+/).filter(Boolean).length} palabras
+              </span>
+            </footer>
           </div>
         ) : (
-          <div
-            style={{
-              backgroundColor: '#12151e',
-              border: '1px solid rgba(255, 255, 255, 0.05)',
-              borderRadius: '12px',
-              padding: '32px 36px',
-              color: '#e2e8f0',
-              lineHeight: 1.7,
-              fontSize: '0.96rem',
-              overflowY: 'auto',
-              maxHeight: '75vh',
-            }}
-          >
+          <article className="bg-[#0b0e14] border border-white/6 rounded-xl p-8 lg:p-12 text-[#e2e8f0] overflow-y-auto max-h-[75vh]">
             {content.trim() ? (
-              <ReactMarkdown
-                components={{
-                  h1: ({ children }) => (
-                    <h1
-                      style={{
-                        fontSize: '1.65rem',
-                        fontWeight: 800,
-                        color: '#f8fafc',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                        paddingBottom: '10px',
-                        marginTop: '16px',
-                        marginBottom: '16px',
-                      }}
-                    >
-                      {children}
-                    </h1>
-                  ),
-                  h2: ({ children }) => (
-                    <h2
-                      style={{
-                        fontSize: '1.3rem',
-                        fontWeight: 700,
-                        color: '#8083ff',
-                        marginTop: '28px',
-                        marginBottom: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      {children}
-                    </h2>
-                  ),
-                  h3: ({ children }) => (
-                    <h3
-                      style={{
-                        fontSize: '1.1rem',
-                        fontWeight: 600,
-                        color: '#4edea3',
-                        marginTop: '22px',
-                        marginBottom: '8px',
-                      }}
-                    >
-                      {children}
-                    </h3>
-                  ),
-                  p: ({ children }) => (
-                    <p style={{ margin: '0 0 14px', color: '#cbd5e1', lineHeight: 1.7 }}>
-                      {children}
-                    </p>
-                  ),
-                  ul: ({ children }) => (
-                    <ul style={{ paddingLeft: '22px', margin: '0 0 16px', color: '#cbd5e1' }}>
-                      {children}
-                    </ul>
-                  ),
-                  ol: ({ children }) => (
-                    <ol style={{ paddingLeft: '22px', margin: '0 0 16px', color: '#cbd5e1' }}>
-                      {children}
-                    </ol>
-                  ),
-                  li: ({ children }) => (
-                    <li style={{ marginBottom: '6px' }}>{children}</li>
-                  ),
-                  blockquote: ({ children }) => (
-                    <blockquote
-                      style={{
-                        margin: '18px 0',
-                        padding: '14px 20px',
-                        backgroundColor: 'rgba(128, 131, 255, 0.08)',
-                        borderLeft: '4px solid #8083ff',
-                        borderRadius: '0 8px 8px 0',
-                        color: '#e2e8f0',
-                        fontStyle: 'italic',
-                      }}
-                    >
-                      {children}
-                    </blockquote>
-                  ),
-                  code: ({ className, children }) => {
-                    const isInline = !className
-                    if (isInline) {
-                      return (
-                        <code
-                          style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                            color: '#c0c1ff',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
-                            fontSize: '0.85em',
-                          }}
-                        >
-                          {children}
-                        </code>
-                      )
-                    }
-                    return (
-                      <pre
-                        style={{
-                          backgroundColor: '#0c0f17',
-                          border: '1px solid rgba(255, 255, 255, 0.06)',
-                          borderRadius: '8px',
-                          padding: '16px',
-                          overflowX: 'auto',
-                          margin: '16px 0',
-                          fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
-                          fontSize: '0.88rem',
-                          color: '#f8fafc',
-                        }}
-                      >
-                        <code>{children}</code>
-                      </pre>
-                    )
-                  },
-                }}
-              >
-                {content}
-              </ReactMarkdown>
+              <div className="reading-column markdown-body">
+                <ReactMarkdown>{content}</ReactMarkdown>
+              </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
-                <Sparkles size={36} style={{ margin: '0 auto 12px', color: '#8083ff' }} />
-                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.1rem' }}>Apuntes vacíos</h3>
-                <p style={{ margin: '8px 0 18px', fontSize: '0.85rem' }}>
-                  Esta clase todavía no tiene contenido escrito en apuntes.md.
+              <div className="text-center py-20 text-slate-500">
+                <FileText size={32} className="mx-auto mb-3 text-slate-600" />
+                <h3 className="text-base font-semibold text-slate-300 m-0">Apuntes vacíos</h3>
+                <p className="text-xs text-slate-500 mt-1 mb-4">
+                  Esta clase no contiene texto generado en apuntes.md.
                 </p>
                 <button
                   onClick={() => setMode('edit')}
-                  style={{
-                    backgroundColor: '#8083ff',
-                    border: 'none',
-                    color: '#fff',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
+                  className="px-4 py-2 text-xs font-medium rounded-lg bg-[#4f6bff] text-white hover:bg-[#637eff] transition-colors cursor-pointer"
                 >
-                  Abrir Editor
+                  Abrir editor
                 </button>
               </div>
             )}
-          </div>
+          </article>
         )}
-      </div>
+      </main>
     </div>
   )
 }

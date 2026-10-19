@@ -142,7 +142,7 @@ CATEGORIAS = ("ideas_clave", "conceptos", "procedimientos", "errores",
 SCHEMA_EXTRACCION: Dict[str, Any] = _obj({
     "ideas_clave": _arr(_obj({"texto": _STR, "evidencia": _STR})),
     "conceptos": _arr(_obj({"termino": _STR, "definicion": _STR, "ejemplo": _STR, "evidencia": _STR})),
-    "procedimientos": _arr(_obj({"titulo": _STR, "pasos": _arr(_STR), "evidencia": _STR})),
+    "procedimientos": _arr(_obj({"titulo": _STR, "pasos": _arr(_STR), "codigo": _STR, "evidencia": _STR})),
     "errores": _arr(_obj({"sintoma": _STR, "causa": _STR, "solucion": _STR, "evidencia": _STR})),
     "comparativas": _arr(_obj({"titulo": _STR, "columnas": _arr(_STR),
                                "filas": _arr(_arr(_STR)), "evidencia": _STR})),
@@ -203,6 +203,16 @@ def _fundamentado(texto: str, base: set, umbral: float = 0.5) -> bool:
 
 def _s(x: Any) -> str:
     return re.sub(r"\s+", " ", str(x if x is not None else "")).strip()
+
+
+def _s_codigo(x: Any) -> str:
+    """Limpia cercas Markdown ``` iniciales o finales preservando saltos de línea e indentación."""
+    if x is None:
+        return ""
+    texto = str(x).strip("\r")
+    texto = re.sub(r"^\s*```[a-zA-Z0-9_-]*\n?", "", texto)
+    texto = re.sub(r"\n?\s*```\s*$", "", texto)
+    return texto.strip("\r\n")
 
 
 def _split_ts(linea: str) -> Tuple[Optional[str], str]:
@@ -551,7 +561,7 @@ def llamar_modelo_json(prompt_usuario: str, schema: Dict[str, Any], options: dic
     contenido, done_reason = _leer_respuesta(respuesta)
     if done_reason == "length":
         raise TruncationError("La salida JSON se cortó por límite de tokens/contexto.")
-    limpio = re.sub(r"^```(?:json)?\s*|\s*```\$", "", contenido.strip())
+    limpio = re.sub(r"^```(?:json)?\s*|\s*```$", "", contenido.strip())
     return json.loads(limpio)
 
 
@@ -612,8 +622,10 @@ def construir_prompt_extraccion(fragmento: str, num: int, total: int, tipo_fuent
         "fragmento ni en el glosario, no lo definas.",
         "'evidencia': copia EXACTAMENTE un timestamp [HH:MM:SS] de una línea del fragmento donde aparece el hecho.",
         "'conceptos': un término por entrada, definición de una frase. 'ejemplo' solo si el texto lo da; si no, \"\".",
-        "'procedimientos': pasos reproducibles en orden (instalar, configurar, ejecutar). Comandos y código entre "
-        "comillas invertidas (`así`).",
+        "'procedimientos': pasos reproducibles en orden (instalar, configurar, ejecutar). Si la fuente explica "
+        "sintaxis, comandos complejos o código de varias líneas (Java, SQL, etc.), extráelo en el campo 'codigo' "
+        "con saltos de línea reales (\\n), o déjalo como cadena vacía \"\" si no aplica. Comandos breves en los pasos "
+        "entre comillas invertidas (`así`).",
         "'errores': SOLO si el texto menciona un fallo, una advertencia o un problema y su solución. Si no, lista vacía.",
         "'comparativas': solo cuando el texto contrasta dos o más cosas (p. ej. dos métodos, dos tipos). "
         "'columnas' (≥2) y 'filas' con el mismo número de celdas que columnas.",
@@ -698,6 +710,10 @@ def validar_extraccion(datos: Any, fragmento: str, base_extra: str = "") -> Tupl
         titulo = _s(it.get("titulo"))
         pasos_raw = it.get("pasos", [])
         pasos = [_s(p) for p in pasos_raw if _s(p)] if isinstance(pasos_raw, list) else []
+        codigo_raw = it.get("codigo")
+        codigo = _s_codigo(codigo_raw) if codigo_raw else ""
+        if codigo and not _fundamentado(codigo, base, 0.35):
+            codigo = ""
         ev = _normalizar_evidencia(it.get("evidencia"), rango)
         if not titulo or not pasos or ev is None:
             descartes += 1
@@ -706,7 +722,7 @@ def validar_extraccion(datos: Any, fragmento: str, base_extra: str = "") -> Tupl
             duda(f"No se pudo contrastar con la fuente el procedimiento «{titulo}»; revísala.", ev)
             descartes += 1
             continue
-        out["procedimientos"].append({"titulo": titulo, "pasos": pasos, "evidencia": ev})
+        out["procedimientos"].append({"titulo": titulo, "pasos": pasos, "codigo": codigo, "evidencia": ev})
 
     for it in lista("errores"):
         if not isinstance(it, dict):
@@ -785,9 +801,16 @@ def _dedup(items: List[dict], clave, elegir, umbral: float = 0.85) -> List[dict]
 
 def _elegir_mejor(campo, previo: dict, nuevo: dict) -> dict:
     ganador = dict(nuevo if campo(nuevo) > campo(previo) else previo)
-    ganador["evidencia"] = previo.get("evidencia") or nuevo.get("evidencia", "")
+    ev_previo = previo.get("evidencia", "")
+    ev_nuevo = nuevo.get("evidencia", "")
+    if ev_previo and ev_nuevo and ev_previo != ev_nuevo:
+        ganador["evidencia"] = f"{ev_previo}, {ev_nuevo}"
+    else:
+        ganador["evidencia"] = ev_previo or ev_nuevo
     if "ejemplo" in ganador and not ganador["ejemplo"]:
         ganador["ejemplo"] = previo.get("ejemplo") or nuevo.get("ejemplo", "")
+    if "codigo" in ganador and not ganador["codigo"]:
+        ganador["codigo"] = previo.get("codigo") or nuevo.get("codigo", "")
     return ganador
 
 
@@ -865,6 +888,8 @@ def componer_apuntes(hechos: Dict[str, list], autoeval: List[dict], pendientes: 
         for n, p in enumerate(hechos["procedimientos"], 1):
             L += [f"**{n}. {p['titulo']}**", ""]
             L += [f"{k}. {_quitar_numeracion(paso)}" for k, paso in enumerate(p["pasos"], 1)]
+            if p.get("codigo"):
+                L += ["", "```java", p["codigo"], "```"]
             L.append("")
         L.pop()
     else:
@@ -1010,7 +1035,7 @@ def limpiar_apuntes_previo_guardado(texto: str) -> str:
     - Retira pies de página y líneas meta de cierre.
     - Normaliza espacios SIN tocar la indentación ni el contenido de los bloques de código.
     """
-    texto = re.sub(r"\((?:Verificar\vert{}verificar)[^\)]*\)", "", texto)
+    texto = re.sub(r"\((?:Verificar|verificar)[^\)]*\)", "", texto)
     texto = RE_TS_CUERPO.sub("", texto)
 
     lineas_limpias: List[str] = []

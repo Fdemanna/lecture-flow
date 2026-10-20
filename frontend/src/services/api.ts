@@ -52,10 +52,25 @@ export interface ApiResponse {
 
 const API_BASE_URL = '/api'
 
+export interface JobState {
+  job_id: string
+  materia: string
+  tema: string
+  status: 'running' | 'completed' | 'failed' | 'cancelled'
+  phase: string
+  progress: number
+  message: string
+  created_at?: string
+  completed_at?: string
+  error?: string | null
+  es_externo?: boolean
+}
+
 export class ApiError extends Error {
   status: number
   statusText: string
   data?: any
+  activeJob?: JobState | null
 
   constructor(message: string, status: number, statusText: string, data?: any) {
     super(message)
@@ -63,6 +78,7 @@ export class ApiError extends Error {
     this.status = status
     this.statusText = statusText
     this.data = data
+    this.activeJob = data?.detail?.active_job ?? data?.active_job ?? null
     Object.setPrototypeOf(this, ApiError.prototype)
   }
 }
@@ -120,10 +136,6 @@ export function extractErrorMessage(
   statusText: string,
   data?: any
 ): string {
-  if (status === 409) {
-    return 'Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
-  }
-
   if (data) {
     const rawDetail = data.detail ?? data.message ?? data.error
     if (rawDetail !== undefined && rawDetail !== null) {
@@ -133,6 +145,10 @@ export function extractErrorMessage(
     if (typeof data === 'string' && data.trim()) {
       return data
     }
+  }
+
+  if (status === 409) {
+    return 'Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
   }
 
   return `Error en llamada API: ${status} ${statusText}`
@@ -232,9 +248,14 @@ export interface NotesResponse {
   ultima_modificacion?: string | null
 }
 
-export async function getNotes(subject: string, className: string): Promise<NotesResponse> {
+export async function getNotes(
+  subject: string,
+  className: string,
+  options?: { signal?: AbortSignal }
+): Promise<NotesResponse> {
   return request<NotesResponse>(
-    `/classes/${encodeURIComponent(subject)}/${encodeURIComponent(className)}/notes`
+    `/classes/${encodeURIComponent(subject)}/${encodeURIComponent(className)}/notes`,
+    options
   )
 }
 
@@ -311,12 +332,31 @@ export interface JobEvent {
   error?: string
 }
 
+export interface StartJobOptions {
+  exportar_notion?: boolean
+  modo_reanudacion?: boolean
+  solo_apuntes?: boolean
+  forzar_transcripcion?: boolean
+  [key: string]: any
+}
+
+export interface StartJobJsonPayload {
+  materia: string
+  tema: string
+  tipo_origen?: 'url' | 'upload'
+  origen?: string
+  url?: string
+  opciones?: StartJobOptions
+  exportar_notion?: boolean
+  [key: string]: any
+}
+
 export async function getActiveJob(): Promise<JobState | null> {
   return request<JobState | null>('/jobs/active')
 }
 
 export async function startJob(
-  payload: FormData | Record<string, any>
+  payload: FormData | StartJobJsonPayload | Record<string, any>
 ): Promise<{ job_id: string; status: string; materia: string; tema: string }> {
   const isFormData = payload instanceof FormData
   const response = await fetch(`${API_BASE_URL}/jobs`, {

@@ -15,6 +15,7 @@ import {
   startJob,
   cancelJob,
   subscribeToJobEvents,
+  ApiError,
   type JobState,
   type JobEvent,
 } from '../services/api'
@@ -191,7 +192,11 @@ export function ProcessingPanel({ onJobFinished, onClose }: ProcessingPanelProps
           materia: materia.trim(),
           tema: tema.trim(),
           tipo_origen: 'url',
+          origen: urlInput.trim(),
           url: urlInput.trim(),
+          opciones: {
+            exportar_notion: exportarNotion,
+          },
           exportar_notion: exportarNotion,
         })
       }
@@ -211,19 +216,24 @@ export function ProcessingPanel({ onJobFinished, onClose }: ProcessingPanelProps
       setLiveProgress(2)
       setLiveMessage('Iniciando pipeline…')
     } catch (err: any) {
-      const is409 =
-        err?.status === 409 ||
-        err?.response?.status === 409 ||
-        (err instanceof Error &&
-          (err.message.includes('409') ||
-            err.message.toLowerCase().includes('conflicto') ||
-            err.message.toLowerCase().includes('conflict') ||
-            err.message.toLowerCase().includes('en curso')))
+      if (err instanceof ApiError && err.status === 409) {
+        let jobActivo = err.activeJob
+        if (!jobActivo) {
+          try {
+            jobActivo = await getActiveJob()
+          } catch {}
+        }
 
-      if (is409) {
-        setErrorMsg(
-          'Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente. Revisa si hay un proceso activo.'
-        )
+        if (jobActivo) {
+          setActiveJob(jobActivo)
+          setLivePhase(jobActivo.phase || 'en curso')
+          setLiveProgress(jobActivo.progress || 10)
+          setLiveMessage(jobActivo.message || 'Sincronizado con proceso activo.')
+          setErrorMsg(null)
+          return
+        }
+
+        setErrorMsg(err.message || 'Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente.')
       } else {
         setErrorMsg(err instanceof Error ? err.message : String(err))
       }

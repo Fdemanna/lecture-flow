@@ -264,6 +264,10 @@ export default function App() {
                 subjectName={activeSubjectData.materia_nombre}
                 className={activeClassData.id}
                 classReadableName={activeClassData.nombre}
+                hasTranscription={Boolean(activeClassData.tiene_transcripcion)}
+                onNotesGenerated={() => {
+                  cargarDatos(true)
+                }}
                 onClose={() => {
                   setSelectedSubject(null)
                   setSelectedClass(null)

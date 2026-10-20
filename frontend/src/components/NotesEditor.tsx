@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import {
   BookOpen,
@@ -13,6 +13,7 @@ import {
   Send,
   Share2,
   FileText,
+  Sparkles,
 } from 'lucide-react'
 import {
   getNotes,
@@ -21,7 +22,11 @@ import {
   sendTelegramNotification,
   regenerateNotes,
   subscribeToJobEvents,
+  cancelJob,
+  getActiveJob,
+  ApiError,
   type JobEvent,
+  type JobState,
 } from '../services/api'
 
 interface NotesEditorProps {
@@ -29,6 +34,8 @@ interface NotesEditorProps {
   subjectName: string
   className: string
   classReadableName: string
+  hasTranscription?: boolean
+  onNotesGenerated?: () => void
   onClose: () => void
 }
 
@@ -37,6 +44,8 @@ export function NotesEditor({
   subjectName,
   className,
   classReadableName,
+  hasTranscription = false,
+  onNotesGenerated,
   onClose,
 }: NotesEditorProps) {
   const [mode, setMode] = useState<'preview' | 'edit'>('preview')
@@ -59,24 +68,145 @@ export function NotesEditor({
   const [regenProgress, setRegenProgress] = useState<number>(0)
   const [regenMessage, setRegenMessage] = useState<string>('')
 
-  async function cargarApuntes() {
+  // Estados de conflicto 409
+  const [conflictingJob, setConflictingJob] = useState<JobState | null>(null)
+  const [cancellingConflicting, setCancellingConflicting] = useState<boolean>(false)
+
+  // Controladores de carreras, suscripciones y timeouts
+  const activeAbortControllerRef = useRef<AbortController | null>(null)
+  const unsubscribeRegenRef = useRef<(() => void) | null>(null)
+  const timeoutIdsRef = useRef<number[]>([])
+
+  function setSafeTimeout(fn: () => void, ms: number) {
+    const id = window.setTimeout(() => {
+      timeoutIdsRef.current = timeoutIdsRef.current.filter((t) => t !== id)
+      fn()
+    }, ms)
+    timeoutIdsRef.current.push(id)
+    return id
+  }
+
+  async function cargarApuntes(signal?: AbortSignal) {
     setLoading(true)
     setError(null)
     try {
-      const res = await getNotes(subject, className)
+      const res = await getNotes(subject, className, { signal })
+      if (signal?.aborted) return
       setContent(res.contenido || '')
       setSavedContent(res.contenido || '')
       setLastModified(res.ultima_modificacion || null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar los apuntes desde el disco.')
+    } catch (err: any) {
+      if (signal?.aborted || err?.name === 'AbortError') return
+      const is404 =
+        err?.status === 404 ||
+        (err instanceof ApiError && err.status === 404) ||
+        (typeof err?.message === 'string' && err.message.includes('404'))
+
+      if (is404) {
+        // La clase no tiene apuntes.md generados aún: estado vacío limpio, no es un error
+        setContent('')
+        setSavedContent('')
+        setLastModified(null)
+      } else {
+        setError(err instanceof Error ? err.message : 'Error al cargar los apuntes desde el disco.')
+      }
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) {
+        setLoading(false)
+      }
     }
   }
 
+  // Carga reactiva con AbortController, reset de estado por clase y limpieza estricta
   useEffect(() => {
-    cargarApuntes()
+    activeAbortControllerRef.current?.abort()
+    const controller = new AbortController()
+    activeAbortControllerRef.current = controller
+
+    unsubscribeRegenRef.current?.()
+    unsubscribeRegenRef.current = null
+
+    // Reset limpio de estado para evitar mezclas entre clases
+    setContent('')
+    setSavedContent('')
+    setLastModified(null)
+    setNotionUrl(null)
+    setError(null)
+    setToastMessage(null)
+    setSaveFeedback(null)
+    setRegenerating(false)
+    setRegenProgress(0)
+    setRegenMessage('')
+    setConflictingJob(null)
+    setMode('preview')
+
+    cargarApuntes(controller.signal)
+
+    return () => {
+      controller.abort()
+      unsubscribeRegenRef.current?.()
+      timeoutIdsRef.current.forEach((id) => clearTimeout(id))
+      timeoutIdsRef.current = []
+    }
   }, [subject, className])
+
+  function conectarAJob(job: JobState) {
+    setConflictingJob(null)
+    setError(null)
+    setRegenerating(true)
+    setRegenProgress(job.progress || 5)
+    setRegenMessage(job.message || 'Procesando en segundo plano…')
+
+    unsubscribeRegenRef.current?.()
+    const unsubscribe = subscribeToJobEvents(
+      job.job_id,
+      (ev: JobEvent) => {
+        setRegenProgress(ev.progress)
+        setRegenMessage(ev.message)
+
+        if (ev.status === 'completed') {
+          setRegenerating(false)
+          setToastMessage('Apuntes generados con éxito.')
+          cargarApuntes(activeAbortControllerRef.current?.signal)
+          setSafeTimeout(() => setToastMessage(null), 5000)
+          unsubscribeRegenRef.current = null
+          onNotesGenerated?.()
+        } else if (ev.status === 'failed' || ev.status === 'cancelled') {
+          setRegenerating(false)
+          setError(ev.error || ev.message || 'La regeneración ha fallado.')
+          unsubscribeRegenRef.current = null
+        }
+      },
+      () => {
+        setRegenMessage('Reconectando con el servidor de eventos…')
+      }
+    )
+    unsubscribeRegenRef.current = unsubscribe
+  }
+
+  async function handleCancelarConflicto() {
+    if (!conflictingJob) return
+    const esExterno = conflictingJob.job_id === 'external' || Boolean(conflictingJob.es_externo)
+    const confirmar = window.confirm(
+      esExterno
+        ? '¿Deseas forzar la liberación del archivo de bloqueo data/.procesando.lock?'
+        : `¿Deseas detener el procesamiento activo de «${conflictingJob.materia} • ${conflictingJob.tema}»?`
+    )
+    if (!confirmar) return
+
+    setCancellingConflicting(true)
+    try {
+      await cancelJob(conflictingJob.job_id)
+      setConflictingJob(null)
+      setError(null)
+      setToastMessage(esExterno ? 'Bloqueo liberado. Ya puedes reintentar la generación.' : 'Procesamiento cancelado.')
+      setSafeTimeout(() => setToastMessage(null), 4000)
+    } catch (cErr) {
+      setError(cErr instanceof Error ? cErr.message : 'Error al cancelar la tarea en conflicto.')
+    } finally {
+      setCancellingConflicting(false)
+    }
+  }
 
   async function handleRegenerate() {
     if (regenerating || saving) return
@@ -90,44 +220,47 @@ export function NotesEditor({
     setRegenProgress(5)
     setRegenMessage('Iniciando tarea de regeneración…')
     setError(null)
+    setConflictingJob(null)
 
     try {
       const res = await regenerateNotes(subject, className)
-      subscribeToJobEvents(
-        res.job_id,
-        (ev: JobEvent) => {
-          setRegenProgress(ev.progress)
-          setRegenMessage(ev.message)
-
-          if (ev.status === 'completed') {
-            setRegenerating(false)
-            setToastMessage('Apuntes regenerados con éxito.')
-            cargarApuntes()
-            setTimeout(() => setToastMessage(null), 5000)
-          } else if (ev.status === 'failed' || ev.status === 'cancelled') {
-            setRegenerating(false)
-            setError(ev.error || ev.message || 'La regeneración ha fallado.')
-          }
-        },
-        () => {
-          setRegenMessage('Reconectando con el servidor de eventos…')
-        }
-      )
+      conectarAJob({
+        job_id: res.job_id,
+        materia: subject,
+        tema: className,
+        status: 'running',
+        phase: 'iniciando',
+        progress: 5,
+        message: 'Iniciando tarea de regeneración…',
+      })
     } catch (err: any) {
       setRegenerating(false)
-      const is409 =
-        err?.status === 409 ||
-        err?.response?.status === 409 ||
-        (err instanceof Error &&
-          (err.message.includes('409') ||
-            err.message.toLowerCase().includes('conflicto') ||
-            err.message.toLowerCase().includes('conflict') ||
-            err.message.toLowerCase().includes('en curso')))
+      if (err instanceof ApiError && err.status === 409) {
+        let jobActivo = err.activeJob
+        if (!jobActivo) {
+          try {
+            jobActivo = await getActiveJob()
+          } catch {}
+        }
 
-      if (is409) {
-        setError(
-          'Conflicto (409): Ya hay una tarea de procesamiento en curso o existe un archivo de bloqueo pendiente.'
-        )
+        if (jobActivo) {
+          const mismaMateria = jobActivo.materia === subject
+          const mismaClase = jobActivo.tema === className || jobActivo.tema === classReadableName
+
+          if (mismaMateria && mismaClase && jobActivo.job_id !== 'external') {
+            conectarAJob(jobActivo)
+            return
+          }
+
+          setConflictingJob(jobActivo)
+          setError(
+            err.message ||
+              `Conflicto (409): Ya existe una tarea activa (${jobActivo.materia} • ${jobActivo.tema}).`
+          )
+          return
+        }
+
+        setError(err.message || 'Conflicto (409): Ya hay una tarea en curso o existe un archivo de bloqueo pendiente.')
       } else {
         setError(err instanceof Error ? err.message : String(err))
       }
@@ -147,7 +280,7 @@ export function NotesEditor({
         message: 'Guardado correctamente en disco',
         timestamp: ahora,
       })
-      setTimeout(() => {
+      setSafeTimeout(() => {
         setSaveFeedback(null)
       }, 4000)
     } catch (err) {
@@ -166,7 +299,7 @@ export function NotesEditor({
       const res = await exportToNotion(subject, className)
       setNotionUrl(res.url_notion)
       setToastMessage('Exportado con éxito a la base de datos de Notion.')
-      setTimeout(() => {
+      setSafeTimeout(() => {
         setToastMessage(null)
       }, 5000)
     } catch (err) {
@@ -184,7 +317,7 @@ export function NotesEditor({
     try {
       await sendTelegramNotification(subject, className, notionUrl || undefined)
       setToastMessage('Notificación enviada a Telegram.')
-      setTimeout(() => {
+      setSafeTimeout(() => {
         setToastMessage(null)
       }, 5000)
     } catch (err) {
@@ -203,7 +336,17 @@ export function NotesEditor({
 
   const hayCambiosSinGuardar = content !== savedContent
 
-  // Advertir al usuario antes de salir si hay cambios sin guardar
+  function handleClose() {
+    if (hayCambiosSinGuardar) {
+      const descartar = window.confirm(
+        'Tienes cambios sin guardar en los apuntes de esta clase. ¿Deseas descartarlos y cerrar?'
+      )
+      if (!descartar) return
+    }
+    onClose()
+  }
+
+  // Advertir al usuario antes de cerrar o recargar pestaña si hay cambios sin guardar
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       if (hayCambiosSinGuardar) {
@@ -340,7 +483,7 @@ export function NotesEditor({
 
           {/* Botón cerrar */}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors cursor-pointer"
             title="Cerrar visor"
             aria-label="Cerrar visor de apuntes"
@@ -383,7 +526,46 @@ export function NotesEditor({
         </div>
       )}
 
-      {error && (
+      {/* Banner interactivo de conflicto 409 si hay tarea en curso */}
+      {conflictingJob && (
+        <div role="alert" aria-live="polite" className="mx-6 mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <span className="font-semibold block text-slate-200">
+                Tarea activa detectada: {conflictingJob.materia} &bull; {conflictingJob.tema}
+              </span>
+              <span className="text-[11px] text-amber-400/80 mt-0.5 block">
+                {conflictingJob.job_id === 'external'
+                  ? 'Existe un archivo de bloqueo pendiente en disco (data/.procesando.lock).'
+                  : `Fase actual: ${conflictingJob.phase} (${conflictingJob.progress}%)`}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            {conflictingJob.job_id !== 'external' && (
+              <button
+                type="button"
+                onClick={() => conectarAJob(conflictingJob)}
+                className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium transition-colors cursor-pointer border border-amber-500/40 text-xs"
+              >
+                Ver progreso
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleCancelarConflicto}
+              disabled={cancellingConflicting}
+              className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-medium transition-colors cursor-pointer border border-rose-500/40 text-xs disabled:opacity-50"
+            >
+              {cancellingConflicting ? 'Liberando…' : conflictingJob.job_id === 'external' ? 'Liberar bloqueo' : 'Detener tarea'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && !conflictingJob && (
         <div role="alert" aria-live="assertive" className="mx-6 mt-4 p-3.5 rounded-lg bg-[#f87171]/10 border border-[#f87171]/25 text-[#f87171] text-xs flex items-center gap-2">
           <AlertCircle size={15} className="shrink-0" aria-hidden="true" />
           <span>{error}</span>
@@ -421,18 +603,42 @@ export function NotesEditor({
                 <ReactMarkdown>{content}</ReactMarkdown>
               </div>
             ) : (
-              <div className="text-center py-20 text-slate-500">
-                <FileText size={32} className="mx-auto mb-3 text-slate-600" />
-                <h3 className="text-base font-semibold text-slate-300 m-0">Apuntes vacíos</h3>
-                <p className="text-xs text-slate-500 mt-1 mb-4">
-                  Esta clase no contiene texto generado en apuntes.md.
+              <div className="text-center py-16 px-4 text-slate-400 max-w-md mx-auto">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto mb-4">
+                  {hasTranscription ? <Sparkles size={26} /> : <FileText size={26} />}
+                </div>
+                <h3 className="text-base font-semibold text-slate-100 m-0">
+                  {hasTranscription ? 'Apuntes pendientes de generación' : 'Apuntes no encontrados'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-2 mb-6 leading-relaxed">
+                  {hasTranscription
+                    ? 'Esta clase dispone de archivo de transcripción local. Puedes iniciar la extracción estructurada de apuntes y preguntas con el pipeline de IA.'
+                    : 'Esta clase aún no cuenta con archivo de apuntes.md en disco. Puedes abrir el editor para comenzar a redactar tus notas.'}
                 </p>
-                <button
-                  onClick={() => setMode('edit')}
-                  className="px-4 py-2 text-xs font-medium rounded-lg bg-[#4f6bff] text-white hover:bg-[#637eff] transition-colors cursor-pointer"
-                >
-                  Abrir editor
-                </button>
+
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  {hasTranscription && (
+                    <button
+                      onClick={handleRegenerate}
+                      disabled={regenerating || loading}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {regenerating ? (
+                        <RefreshCw size={14} className="animate-spin text-white" />
+                      ) : (
+                        <Sparkles size={14} />
+                      )}
+                      <span>{regenerating ? 'Generando apuntes…' : 'Generar apuntes con IA'}</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setMode('edit')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-colors cursor-pointer"
+                  >
+                    <Edit3 size={14} />
+                    <span>{hasTranscription ? 'Escribir manualmente' : 'Abrir editor'}</span>
+                  </button>
+                </div>
               </div>
             )}
           </article>
